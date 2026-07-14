@@ -1,3 +1,298 @@
 {
-  "seen": {}
+  "seen": {
+    "9bc2dbc398d2e4c14ccc7bf4e357b55edc1fe5cdd7469c23aa2f0e22e43d1b77": {
+      "url": "https://grab.careers/en/jobs/saved-jobs/",
+      "title": "0 Your <strong>Saved Jobs</strong>",
+      "company": "Grab",
+      "first_seen": "2026-07-14T17:46:55.200001+00:00"
+    },
+    "28573e3003ac09b4dca21d7b4fc2da25ee5ff6a92f9721fbe349e44055c8db44": {
+      "url": "https://www.rolandberger.com/en/Join/Join-Us/Career-Starter/",
+      "title": "Career Starter",
+      "company": "Roland Berger",
+      "first_seen": "2026-07-14T17:47:43.599073+00:00"
+    },
+    "9746a86dd3e0417d1ce536ef6dd80023e2086c2f0ead5d52d05f0a65c255e58d": {
+      "url": "https://www.rolandberger.com/en/Join/Your-Development/Career-Stages/",
+      "title": "Career Stages",
+      "company": "Roland Berger",
+      "first_seen": "2026-07-14T17:47:43.599439+00:00"
+    },
+    "cccb3ad1ad3543e8b9a03c3822fe997fd7deaf48a75ba9e7a4435a314562f6cc": {
+      "url": "https://www.rolandberger.com/en/Join/All-Jobs/",
+      "title": "Jobs",
+      "company": "Roland Berger",
+      "first_seen": "2026-07-14T17:47:43.599715+00:00"
+    },
+    "a12206e046750210efc816281aa2185aa3d212797a2b47a11e7ae5b2bae81d0c": {
+      "url": "https://kpmg.com/vn/en/careers.html",
+      "title": "Careers",
+      "company": "KPMG Vietnam",
+      "first_seen": "2026-07-14T17:47:44.039060+00:00"
+    },
+    "9f282ae09ddbe705619b956dfd4e1ae2d5467e5371833ae2882836c682e318f9": {
+      "url": "https://kpmg.com/xx/en/careers/job-search.html",
+      "title": "Global job search",
+      "company": "KPMG Vietnam",
+      "first_seen": "2026-07-14T17:47:44.039612+00:00"
+    },
+    "095c451625ed23ff54ea4ec40d21b0b9bcc9533743d22c8e90541edbef442aa9": {
+      "url": "https://kpmg.com/vn/en/careers/internship.html",
+      "title": "Apply now",
+      "company": "KPMG Vietnam",
+      "first_seen": "2026-07-14T17:47:44.039913+00:00"
+    },
+    "dd8ce769941d700f893da7372e2b9b6bcc45c3f2cce2961000ffe83ee30da9ae": {
+      "url": "https://www.ey.com/en_vn/careers/what-you-can-do-here",
+      "title": "What you can do here",
+      "company": "EY-Parthenon",
+      "first_seen": "2026-07-14T17:47:44.526293+00:00"
+    },
+    "24f9d65211704d10f2023dee6868cb3a633c0b121ec31f4b4ab8c411c998e0d6": {
+      "url": "https://www.ey.com/en_vn/careers/technology",
+      "title": "Technology careers at EY",
+      "company": "EY-Parthenon",
+      "first_seen": "2026-07-14T17:47:44.526681+00:00"
+    },
+    "d9eae6653bedef842b0610febaa524c63c7e5161d2773c241b1255e2f9a4a835": {
+      "url": "https://www.ey.com/en_vn/careers/assurance",
+      "title": "Careers in Assurance",
+      "company": "EY-Parthenon",
+      "first_seen": "2026-07-14T17:47:44.526976+00:00"
+    },
+    "0dcd82c265f5bd6acce3e2e3d2ea4baf6637c1ee8823fe78a139d4fc0c8f0bab": {
+      "url": "https://www.ey.com/en_vn/careers/consulting",
+      "title": "Careers in Consulting",
+      "company": "EY-Parthenon",
+      "first_seen": "2026-07-14T17:47:44.527262+00:00"
+    },
+    "592732a3113c3c3cf74e3d9ff7ec6487c3b36a9fb4a89ff20b042b56d346721f": {
+      "url": "https://www.ey.com/content/ey-unified-site/ey-com/local/asean/en_vn/home/careers/ey-parthenon-careers",
+      "title": "Careers in EY-Parthenon",
+      "company": "EY-Parthenon",
+      "first_seen": "2026-07-14T17:47:44.527443+00:00"
+    },
+    "4a3bdc7fef3f53e2f00e09ebae95bc9915427d6f6e8bce4e97fb93219ee113b0": {
+      "url": "https://www.ey.com/en_vn/careers/tax",
+      "title": "Careers in Tax",
+      "company": "EY-Parthenon",
+      "first_seen": "2026-07-14T17:47:44.527721+00:00"
+    },
+    "7d47fe52228502f2d4d38382353b249402088d721ca11fff2c441004edce03e6": {
+      "url": "https://www.ey.com/en_vn/careers/people-advisory-services",
+      "title": "Careers in People Advisory Services",
+      "company": "EY-Parthenon",
+      "first_seen": "2026-07-14T17:47:44.527988+00:00"
+    },
+    "27ad91a9713a03ec14b89e9837d551d5944c48b687dcdaa5f29b04baee801f6f": {
+      "url": "https://www.ey.com/en_vn/careers/financial-services",
+      "title": "Careers in Financial Services",
+      "company": "EY-Parthenon",
+      "first_seen": "2026-07-14T17:47:44.528283+00:00"
+    },
+    "f1b4ad56bfc38f3afe4d0652efcea37f33af80254d9b5b7412a5910b1e4a8ce9": {
+      "url": "https://www.ey.com/en_vn/careers/global-delivery-services",
+      "title": "Careers in Global Delivery Services",
+      "company": "EY-Parthenon",
+      "first_seen": "2026-07-14T17:47:44.528580+00:00"
+    },
+    "ffb53a8b75082a889ed5198060e8fbc7d5c015241223f1d61774e30cab01ca2d": {
+      "url": "https://www.ey.com/en_vn/careers/core-business-services",
+      "title": "Careers in Core Business Services",
+      "company": "EY-Parthenon",
+      "first_seen": "2026-07-14T17:47:44.528874+00:00"
+    },
+    "3341a743eb8b95c37f37359a742eac5493270d1c7c6edfd4cc6f0e78932fb41c": {
+      "url": "https://www.ey.com/en_vn/careers/what-its-like-to-work-here",
+      "title": "What it's like to work here",
+      "company": "EY-Parthenon",
+      "first_seen": "2026-07-14T17:47:44.529166+00:00"
+    },
+    "ddb13726231cace4f6c1bcd6a6208b2df6614572d17fb81218d5b60426f0dcd9": {
+      "url": "https://www.ey.com/content/ey-unified-site/ey-com/local/asean/en_vn/home/careers/diversity-inclusiveness",
+      "title": "Diversity, equity and inclusiveness",
+      "company": "EY-Parthenon",
+      "first_seen": "2026-07-14T17:47:44.529460+00:00"
+    },
+    "c02139492e61771766734f7a4df6d7f95c121eb2d9593e5fc0163d0fd426ebe8": {
+      "url": "https://www.ey.com/en_vn/careers/personalized-career-development",
+      "title": "Personalized career development",
+      "company": "EY-Parthenon",
+      "first_seen": "2026-07-14T17:47:44.529753+00:00"
+    },
+    "166d7a995db53dd962786d4a00a0bfa1625b96a597dcbdcc45625b5bd9c35dbb": {
+      "url": "https://www.ey.com/en_vn/careers/flexibility-mobility",
+      "title": "Flexibility and mobility",
+      "company": "EY-Parthenon",
+      "first_seen": "2026-07-14T17:47:44.530042+00:00"
+    },
+    "50b9f207eb180cd2a514a5c8fd79b4b16a43fb924343344447f4d6aa9a32e934": {
+      "url": "https://www.ey.com/content/ey-unified-site/ey-com/local/asean/en_vn/home/careers/people-stories",
+      "title": "People stories",
+      "company": "EY-Parthenon",
+      "first_seen": "2026-07-14T17:47:44.530318+00:00"
+    },
+    "1cf637bb3bee2481b067b8b6270086d262eb1b6911b4d2d8d430cb49d010f02d": {
+      "url": "https://www.ey.com/en_vn/careers/how-to-join-us",
+      "title": "How to join us",
+      "company": "EY-Parthenon",
+      "first_seen": "2026-07-14T17:47:44.530589+00:00"
+    },
+    "2024084c661aa4908039398b7253693161d31e55840e881477bdb69ef92e66e4": {
+      "url": "https://www.ey.com/en_vn/careers/how-we-hire",
+      "title": "How we hire",
+      "company": "EY-Parthenon",
+      "first_seen": "2026-07-14T17:47:44.530851+00:00"
+    },
+    "c15037565c9704444b34bf2982639acd2ea43e140c3793bea4784ff4febc5aca": {
+      "url": "https://www.ey.com/en_vn/careers/interview-tips",
+      "title": "Interview tips",
+      "company": "EY-Parthenon",
+      "first_seen": "2026-07-14T17:47:44.531110+00:00"
+    },
+    "5884c53d5a61f1f0ef738323a98c0718620395843c399f016171cef10300f1fc": {
+      "url": "https://www.ey.com/en_vn/careers/what-we-look-for",
+      "title": "What we look for",
+      "company": "EY-Parthenon",
+      "first_seen": "2026-07-14T17:47:44.531553+00:00"
+    },
+    "4de882337e8da7d68bf07d6cea59ae24977bda1e330029be086cb484875a5187": {
+      "url": "https://eyglobal.yello.co/job_boards/c1riT--B2O-KySgYWsZO1Q?locale=en",
+      "title": "Early Career Opportunities",
+      "company": "EY-Parthenon",
+      "first_seen": "2026-07-14T17:47:44.531908+00:00"
+    },
+    "9ca3e3294cf8c150ee2f43b979cb11b283a8ccf98b76daaf90b1de1954c370dd": {
+      "url": "https://www.ey.com/en_vn/careers/job-search",
+      "title": "Job search",
+      "company": "EY-Parthenon",
+      "first_seen": "2026-07-14T17:47:44.532245+00:00"
+    },
+    "c486da09f71eb4fedc1d6d86989691888307874f6bcd2c84a6b3295153840b3b": {
+      "url": "https://www.ey.com/en_gl/newsroom/2025/03/major-expansion-of-ey-parthenon-strengthens-ey-position-in-global-strategy-and-transactions-market",
+      "title": "Major expansion of EY-Parthenon strengthens EY position in global strategy and transactions market",
+      "company": "EY-Parthenon",
+      "first_seen": "2026-07-14T17:47:44.532624+00:00"
+    },
+    "57f45e3255864636040b3612ae5727446dc7a4753e688cb2ce767c80c8ba14b2": {
+      "url": "https://www.ey.com/en_vn/careers/shapers-of-the-future",
+      "title": "Meet our people shaping their future",
+      "company": "EY-Parthenon",
+      "first_seen": "2026-07-14T17:47:44.532927+00:00"
+    },
+    "1c64ac336a97adb62e0bfef6f698585f76cc83f256029ffa693b08eedead3c2b": {
+      "url": "https://www.ey.com/en_vn/careers/inclusiveness-for-everyone",
+      "title": "Explore our inclusive environment",
+      "company": "EY-Parthenon",
+      "first_seen": "2026-07-14T17:47:44.533285+00:00"
+    },
+    "5bd72f585d5255d0ea2f2720fbcce93bbe0ebf551fbf5d5c5a54f5c4b6dd7960": {
+      "url": "https://www.ey.com/en_vn/careers/ai",
+      "title": "Explore a career in AI",
+      "company": "EY-Parthenon",
+      "first_seen": "2026-07-14T17:47:44.533659+00:00"
+    },
+    "1470d39025d95a799244e61184eeef16be465b0eff398d812641bbc31d078084": {
+      "url": "https://www.pgcareers.com/us/en/other-careers",
+      "title": "View Opportunities",
+      "company": "Procter & Gamble",
+      "first_seen": "2026-07-14T17:48:03.595800+00:00"
+    },
+    "cbb88dd832b1acb757dd9f4b6d6eeae00f38aac82369fed1bc6d2ca512bda3d8": {
+      "url": "https://www2.deloitte.com/global/en/careers.html",
+      "title": "Careers",
+      "company": "Deloitte",
+      "first_seen": "2026-07-14T17:48:32.463846+00:00"
+    },
+    "ccf386dc090342d99153bbf587f19888821e4b1a6989a3c3f71966799689d48c": {
+      "url": "https://www.coca-colacompany.com/careers/life-at-coca-cola",
+      "title": "Life at Coca‑Cola",
+      "company": "The Coca-Cola Company",
+      "first_seen": "2026-07-14T17:48:38.915167+00:00"
+    },
+    "4482abe3dbfd418c3f8726be97faa8087f4d68fb2e1145461a56f4abc06cdd76": {
+      "url": "https://www.coca-colacompany.com/careers/life-at-coca-cola#our-culture",
+      "title": "Culture",
+      "company": "The Coca-Cola Company",
+      "first_seen": "2026-07-14T17:48:38.915742+00:00"
+    },
+    "461aa2f710689d325b197b089585a91124695004d3b633c4f492085312d69418": {
+      "url": "https://www.coca-colacompany.com/careers/life-at-coca-cola#benefits",
+      "title": "Benefits",
+      "company": "The Coca-Cola Company",
+      "first_seen": "2026-07-14T17:48:38.916184+00:00"
+    },
+    "1f90aef9fee94991ebfbeeb48abb5f572353ed14811abfa2ac162367bfd38628": {
+      "url": "https://www.coca-colacompany.com/careers/life-at-coca-cola/career-development",
+      "title": "Career Development",
+      "company": "The Coca-Cola Company",
+      "first_seen": "2026-07-14T17:48:38.916644+00:00"
+    },
+    "8ffacc61a335303ac9653dd898645007c366e25cc62c6144df1740746a97acd5": {
+      "url": "https://www.coca-colacompany.com/careers/work-with-us",
+      "title": "Work With Us",
+      "company": "The Coca-Cola Company",
+      "first_seen": "2026-07-14T17:48:38.917115+00:00"
+    },
+    "355821c668e3c787707dc5017249aaf8e8b4f11693c98ed6beccee24636ef25e": {
+      "url": "https://www.coca-colacompany.com/careers/career-areas",
+      "title": "Career Areas",
+      "company": "The Coca-Cola Company",
+      "first_seen": "2026-07-14T17:48:38.917603+00:00"
+    },
+    "6cc40fb362f84b1e9ce90e84b3534a8bd387f82c8f3b65482f27326d143d0f0b": {
+      "url": "https://www.coca-colacompany.com/careers/career-areas#early-career",
+      "title": "Early Career",
+      "company": "The Coca-Cola Company",
+      "first_seen": "2026-07-14T17:48:38.918039+00:00"
+    },
+    "3e274e928eea1e027a46de693bca57d3f8c845f4cf24d5b602d218e5fffaf11c": {
+      "url": "https://www.coca-colacompany.com/careers/career-areas/our-military-community",
+      "title": "Military",
+      "company": "The Coca-Cola Company",
+      "first_seen": "2026-07-14T17:48:38.918494+00:00"
+    },
+    "650385dbf6ab7817d731b6a5ef2da4809318446977e28c37ad6e31d159cee18d": {
+      "url": "https://www.coca-colacompany.com/careers/career-areas/accessible-workplace",
+      "title": "Accessible Workplace",
+      "company": "The Coca-Cola Company",
+      "first_seen": "2026-07-14T17:48:38.918950+00:00"
+    },
+    "030f3f08931a402e321c8f4643650fdd635ae44ded908290f9d69146a1d5af5b": {
+      "url": "https://www.coca-colacompany.com/careers/hiring-process",
+      "title": "Hiring Process",
+      "company": "The Coca-Cola Company",
+      "first_seen": "2026-07-14T17:48:38.919447+00:00"
+    },
+    "677828f2da98103f1537ac3d3977bf98a2381789c001e99bb55419d641e89435": {
+      "url": "https://www.coca-colacompany.com/careers/hiring-process#application-process",
+      "title": "Application Process",
+      "company": "The Coca-Cola Company",
+      "first_seen": "2026-07-14T17:48:38.919908+00:00"
+    },
+    "a8faa726fd5f646076a32fdc8594d122250fd93e01bcddd61e8e11f73f038d63": {
+      "url": "https://www.coca-colacompany.com/careers/hiring-process#interview",
+      "title": "Interview",
+      "company": "The Coca-Cola Company",
+      "first_seen": "2026-07-14T17:48:38.920388+00:00"
+    },
+    "e55649f03f8d634a05793455298943a7dc039a0a0708201884fb483febdf9615": {
+      "url": "https://www.coca-colacompany.com/careers/hiring-process#offers",
+      "title": "Offers",
+      "company": "The Coca-Cola Company",
+      "first_seen": "2026-07-14T17:48:38.920796+00:00"
+    },
+    "7476617649e6c5d967ab02c4c260d1fae1df2ee64285ec73f6e0675f37823f38": {
+      "url": "https://www.coca-colacompany.com/careers/job-search/systemjobs",
+      "title": "Coca‑Cola System Jobs",
+      "company": "The Coca-Cola Company",
+      "first_seen": "2026-07-14T17:48:38.921236+00:00"
+    },
+    "e4dc0a03a73801d8c89e4237d5da7146780714d0143007b5374d30e938c5d14a": {
+      "url": "https://www.coca-colacompany.com/policies-and-practices/employment/recruitment-scams-fraudulent-activity",
+      "title": "Learn More",
+      "company": "The Coca-Cola Company",
+      "first_seen": "2026-07-14T17:48:38.921750+00:00"
+    }
+  }
 }
