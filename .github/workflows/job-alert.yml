@@ -1,0 +1,47 @@
+name: Job Alert Bot
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"   # mỗi 6 tiếng (UTC)
+  workflow_dispatch: {}      # cho phép chạy tay từ tab Actions để test
+
+permissions:
+  contents: write   # cần quyền write để commit lại state.json
+
+jobs:
+  check-jobs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Run tests
+        run: pytest tests/ -q
+
+      - name: Run job alert script
+        env:
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+          MAX_WORKERS: "6"
+          PLAYWRIGHT_MAX_CONCURRENCY: "2"
+        run: python src/main.py
+
+      - name: Commit updated state.json
+        run: |
+          git config user.name "job-alert-bot"
+          git config user.email "actions@github.com"
+          git add state.json
+          git diff --quiet --cached || git commit -m "chore: update seen jobs state [skip ci]"
+          git push

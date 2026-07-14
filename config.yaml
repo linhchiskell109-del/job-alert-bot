@@ -1,0 +1,206 @@
+# =========================================================================
+# CONFIG cho Job Alert Bot — v2 (auto-detect, không cần khai báo ATS/selector)
+# =========================================================================
+# Mỗi công ty CHỈ CẦN "name" + "url" (link tới trang career/tuyển dụng).
+# Bot sẽ tự động:
+#   - Phát hiện công ty có dùng Workday/Greenhouse/Lever không (qua ats_detector.py)
+#   - Nếu không, tự parse HTML để tìm job (heuristic, không cần CSS selector)
+#   - Nếu HTML tĩnh không đủ (trang cần JS) -> tự fallback sang trình duyệt thật
+#
+# TODO: một vài URL dưới đây là best-effort tại thời điểm viết config, có thể đã
+# đổi domain/path. Nếu log báo "[NONE] <company>: 0 job(s)" liên tục, việc đầu
+# tiên cần làm là mở URL đó bằng trình duyệt và kiểm tra link có còn đúng không
+# (KHÔNG cần inspect CSS selector — chỉ cần đúng URL).
+#
+# Escape hatch (KHÔNG bắt buộc): nếu bạn đã biết chắc 1 công ty dùng ATS nào đó,
+# có thể khai báo thẳng để bỏ qua bước auto-detect, ví dụ:
+#   - name: "Some Company"
+#     url: "https://somecompany.com/careers"
+#     ats_hint: "greenhouse"
+#     ats_params: { board_token: "somecompany" }
+# =========================================================================
+
+companies:
+  # ---------------- Vietnam tech / fintech ----------------
+  - name: "MoMo (M_Service)"
+    url: "https://momo.vn/tuyen-dung"
+
+  - name: "VNG"
+    url: "https://vng.careers/jobs"
+
+  - name: "Shopee"
+    url: "https://careers.shopee.vn/"
+
+  - name: "Grab"
+    url: "https://grab.careers"
+
+  - name: "Techcombank"
+    url: "https://tuyendung.techcombank.com.vn/"
+
+  - name: "Zalo"
+    url: "https://zalo.careers/"
+
+  - name: "Zalopay"
+    url: "https://zalopay.careers/"
+
+  - name: "Monee"
+    url: "https://monee.vn/careers"   # TODO verify URL đúng
+
+  # ---------------- Consulting ----------------
+  - name: "McKinsey & Company"
+    url: "https://www.mckinsey.com/careers/search-jobs"
+
+  - name: "Bain & Company"
+    url: "https://www.bain.com/careers/find-a-job/"
+
+  - name: "Boston Consulting Group (BCG)"
+    url: "https://www.bcg.com/careers/job-search"
+
+  - name: "Roland Berger"
+    url: "https://www.rolandberger.com/en/Careers.html"
+
+  - name: "KPMG Vietnam"
+    url: "https://kpmg.com/vn/en/home/careers.html"
+
+  - name: "EY-Parthenon"
+    url: "https://www.ey.com/en_vn/careers"
+
+  - name: "PwC"
+    url: "https://www.pwc.com/vn/en/careers.html"
+
+  - name: "Deloitte"
+    url: "https://www2.deloitte.com/vn/en/careers.html"
+
+  # ---------------- FMCG ----------------
+  - name: "Procter & Gamble"
+    url: "https://www.pgcareers.com/"
+
+  - name: "Masan Consumer Holdings"
+    url: "https://www.masangroup.com/en/careers"
+
+  - name: "Unilever"
+    url: "https://www.unilever.com/careers/search-and-apply/"
+
+  - name: "Nestlé"
+    url: "https://www.nestle.com/jobs"
+
+  - name: "The Coca-Cola Company"
+    url: "https://www.coca-colacompany.com/careers"
+
+  - name: "Vinamilk"
+    url: "https://tuyendung.vinamilk.com.vn/"
+
+# =========================================================================
+# Từ khoá URL bổ sung (tuỳ chọn) — nếu 1 site dùng path pattern lạ (không nằm
+# trong danh sách mặc định ở src/heuristics.py), thêm ở đây thay vì sửa code.
+# Ví dụ: nếu 1 công ty dùng "/co-hoi/" thay vì "/tuyen-dung/", thêm "co-hoi" vào đây.
+# =========================================================================
+extra_job_url_keywords: []
+
+# =========================================================================
+# TỪ KHOÁ JD (title/description phải chứa ÍT NHẤT 1 từ trong danh sách này)
+# =========================================================================
+jd_keywords:
+  - product
+  - product management
+  - product manager
+  - associate product manager
+  - apm
+  - product owner
+  - growth product
+  - platform product
+  - digital product
+  - consumer product
+  - growth
+  - growth marketing
+  - growth strategy
+  - growth operations
+  - business growth
+  - user growth
+  - commercial growth
+  - growth associate
+  - consultant
+  - consulting
+  - associate consultant
+  - strategy
+  - strategic
+  - strategy consulting
+  - business consulting
+  - management consulting
+  - transformation
+  - transformation office
+  - business transformation
+  - corporate strategy
+  - internal consulting
+  - business development
+  - bizdev
+  - commercial
+  - commercial planning
+  - commercial excellence
+  - partnership
+  - partnerships
+  - merchant
+  - merchant growth
+  - ecosystem
+  - operations
+  - operation
+  - ops
+  - program management
+  - project management
+  - innovation
+  - venture
+  - venture builder
+  - venture studio
+  - analytics
+  - analyst
+  - business analyst
+  - product analyst
+  - growth analyst
+  - data analyst
+  - strategy analyst
+
+# =========================================================================
+# LEVEL (title/description phải chứa ÍT NHẤT 1 từ trong danh sách này)
+# Để trống (levels: []) nếu không muốn lọc theo level.
+# =========================================================================
+levels:
+  - associate
+  - executive
+  - specialist
+  - coordinator
+  - intern
+  - internship
+  - graduate
+  - graduate program
+  - management associate
+  - management trainee
+  - trainee
+  - fresh graduate
+  - fresher
+  - entry level
+  - entry-level
+  - junior
+  - new grad
+  - campus
+  - early career
+  - rotation
+  - rotational
+  - apm
+
+# =========================================================================
+# LOCATION (title/location phải chứa ÍT NHẤT 1 từ trong danh sách này)
+# =========================================================================
+locations:
+  - "vn"
+  - "vietnam"
+  - "viet nam"
+  - "hn"
+  - "ha noi"
+  - "hanoi"
+  - "hcmc"
+  - "hcm"
+  - "ho chi minh"
+
+# match_mode: "AND" -> job phải khớp keyword AND level AND location
+#             "keyword_only" -> chỉ cần khớp keyword (bỏ qua level/location)
+match_mode: "AND"
