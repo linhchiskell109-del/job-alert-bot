@@ -22,6 +22,10 @@ def load_config(path: str = CONFIG_PATH) -> dict:
     # "semantic" (mặc định) -> matching/engine.py (data-driven, xem config/taxonomy.yaml
     # + config/scoring.yaml). "legacy" -> filters.job_matches cũ (keyword/level/location).
     config.setdefault("matching_engine", "semantic")
+    # Debug mode: coi mọi job là mới, bỏ qua state.json (không ghi đè), vẫn chạy
+    # đầy đủ semantic matching. Có thể override nhanh bằng env var
+    # DEBUG_IGNORE_DUPLICATES=true (ưu tiên hơn giá trị này — xem src/main.py).
+    config.setdefault("debug_ignore_duplicates", False)
 
     # Chuẩn hoá URL (bỏ tracking param như utm_/fbclid/gclid/srsltid) ngay khi load,
     # để mọi nơi dùng config.yaml sau đó đều thấy URL đã sạch.

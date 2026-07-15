@@ -6,6 +6,14 @@ QUAN TRỌNG: dùng CHUNG heuristic `extract_jobs_from_html()` với html_scrape
 không hardcode CSS selector riêng cho từng công ty. Sau khi Playwright render xong,
 lấy HTML cuối cùng (page.content()) rồi áp dụng heuristic y hệt lên đó.
 
+Nhiều careers site (Shopee/Zalo/Monee/McKinsey...) chỉ render batch job đầu tiên
+sau khi trang load xong, phần còn lại load thêm khi cuộn xuống (infinite scroll)
+hoặc bấm "load more". Để xử lý chung cho MỌI site kiểu này mà không cần biết
+selector riêng của từng site, sau khi trang load xong ta cuộn xuống đáy nhiều lần
+(SCROLL_PASSES) — đây là hành vi generic (giống người dùng thật cuộn trang), áp
+dụng được cho bất kỳ site nào dùng infinite scroll, không phải hack riêng cho 1
+công ty cụ thể.
+
 Lưu ý kỹ thuật: mỗi lần gọi fetch() tự tạo 1 `sync_playwright()` instance riêng
 (không chia sẻ giữa các thread) — an toàn khi chạy trong ThreadPoolExecutor, đúng
 theo khuyến nghị của Playwright cho môi trường đa luồng. Số browser chạy đồng thời
@@ -21,6 +29,11 @@ _UA = (
     "(KHTML, like Gecko) Chrome/124.0 Safari/537.36 JobAlertBot/2.0"
 )
 
+# Số lần cuộn xuống đáy trang để kích hoạt infinite-scroll/lazy-load — generic,
+# áp dụng cho MỌI site, không phải selector riêng cho công ty nào.
+SCROLL_PASSES = 4
+SCROLL_WAIT_MS = 800
+
 
 def fetch(url: str, company: str, extra_keywords: tuple = ()) -> list[dict]:
     with PLAYWRIGHT_SEMAPHORE:
@@ -31,6 +44,11 @@ def fetch(url: str, company: str, extra_keywords: tuple = ()) -> list[dict]:
                 page.goto(url, timeout=45000, wait_until="networkidle")
                 # nhiều trang lazy-load list job ngay cả sau networkidle -> đợi thêm 1 nhịp
                 page.wait_for_timeout(1500)
+
+                for _ in range(SCROLL_PASSES):
+                    page.mouse.wheel(0, 4000)
+                    page.wait_for_timeout(SCROLL_WAIT_MS)
+
                 html = page.content()
             finally:
                 browser.close()

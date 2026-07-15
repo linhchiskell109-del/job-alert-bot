@@ -76,3 +76,29 @@ def test_company_override_takes_priority_over_keyword_industry_detection():
 def test_industry_without_override_falls_back_to_keyword_or_general():
     result = _evaluate("Some Random Startup", "Growth Associate")
     assert result.industry in TAXONOMY.industries
+
+
+def test_reworded_title_without_exact_synonym_phrase_still_matches_via_token_overlap():
+    # "Digital Product Ownership Lead" không khớp NGUYÊN VĂN synonym nào trong
+    # taxonomy.yaml ("digital product", "product owner"...), nhưng chứa đủ token
+    # để engine nhận ra đây vẫn là function Product qua token-overlap fuzzy match.
+    result = _evaluate("MoMo (M_Service)", "Digital Product Ownership Lead")
+    assert result.accepted
+    assert result.function == "product"
+
+
+def test_plural_variant_of_synonym_matches_via_fuzzy_single_word():
+    # "Junior Consultants" (số nhiều) không khớp nguyên văn synonym "junior
+    # consultant" (số ít) hay "consultant" — engine vẫn nhận ra qua fuzzy
+    # single-word match (không cần đúng chính tả/số ít số nhiều tuyệt đối).
+    result = _evaluate("Bain & Company", "Junior Consultants")
+    assert result.accepted
+    assert result.function == "consulting"
+
+
+def test_weak_fuzzy_match_does_not_hard_reject_as_excluded_function():
+    # Match yếu (dưới ngưỡng HARD_FAIL_CONFIDENCE_THRESHOLD) vào 1 excluded
+    # function không được phép tự động loại thẳng job — tránh false positive.
+    result = _evaluate("Grab", "Platform Growth Champion")
+    assert result.accepted
+    assert result.function == "growth"

@@ -24,24 +24,47 @@ companies:
   - name: "MoMo (M_Service)"
     url: "https://momo.careers/jobs-opening"
 
+  # Xác minh lại 2026-07: www.grab.careers KHÔNG dùng SmartRecruiters làm
+  # frontend (tự build, JS SPA nhẹ) nhưng dữ liệu job của Grab CŨNG được đăng
+  # song song trên 1 careers site SmartRecruiters chính chủ, thật
+  # (careers.smartrecruiters.com/Grab, "powered by SmartRecruiters" ở footer).
+  # SmartRecruiters có public API không cần key -> dùng ats_hint để gọi thẳng
+  # API (nhanh, ổn định, có phân trang) thay vì scrape HTML/Playwright.
   - name: "Grab"
-    url: "https://grab.careers"
+    url: "https://careers.smartrecruiters.com/Grab"
+    ats_hint: "smartrecruiters"
+    ats_params: { company_identifier: "Grab" }
 
+  # Xác minh lại 2026-07: careers.shopee.sg là site Singapore, không phải VN.
+  # Site tuyển dụng Vietnam thật là careers.shopee.vn (xác nhận qua Facebook
+  # "Shopee Careers" chính chủ + fanpage). Trang là React SPA (HTML tĩnh rỗng,
+  # job list render bằng JS) -> pipeline tự fallback html -> playwright.
   - name: "Shopee"
-    url: "https://careers.shopee.sg"
+    url: "https://careers.shopee.vn/jobs"
 
+  # Xác minh lại 2026-07: "https://zalo.careers/" chỉ là trang chủ (landing),
+  # danh sách job thật nằm ở "/jobs" (xác nhận qua LinkedIn chính chủ Zalo:
+  # "Find your next job at zalo.careers/jobs"). Vẫn là Next.js SPA -> cần
+  # playwright fallback (html_scraper sẽ trả 0, đúng như thiết kế).
   - name: "Zalo"
-    url: "https://zalo.careers/"
+    url: "https://zalo.careers/jobs"
 
   - name: "Techcombank"
     url: "https://techcombankjobs.com"
 
+  # Xác minh lại 2026-07: "https://careers.monee.com/careers" bị lỗi/không
+  # đúng path (không tìm thấy khi tra cứu). URL đúng là "https://www.monee.com/jobs"
+  # (job detail thật quan sát được: careers.monee.com/job-detail?id=...). Trang
+  # là SPA (HTML tĩnh rỗng) -> cần playwright fallback.
   - name: "Monee"
-    url: "https://careers.monee.com/careers"
+    url: "https://www.monee.com/jobs"
 
   # ---------------- Consulting ----------------
+  # Xác minh lại 2026-07: "https://www.mckinsey.com/careers" là trang giới
+  # thiệu (không có job list). URL đúng để scrape là trang search-jobs, filter
+  # sẵn theo Vietnam để giảm nhiễu. Vẫn là SPA -> cần playwright fallback.
   - name: "McKinsey & Company"
-    url: "https://www.mckinsey.com/careers"
+    url: "https://www.mckinsey.com/careers/search-jobs?countries=Vietnam"
 
   - name: "Bain & Company"
     url: "https://www.bain.com/careers"
@@ -80,6 +103,11 @@ companies:
   - name: "The Coca-Cola Company"
     url: "https://careers.coca-colacompany.com"
 
+  # Xác minh lại 2026-07: URL này ĐÚNG — trang tuyển dụng là HTML tĩnh (server-
+  # rendered, không cần JS), có 36 job hiển thị trực tiếp trong HTML lúc kiểm
+  # tra. Nếu vẫn thấy 0 job dù URL reachable, nhiều khả năng do chặn bot theo
+  # User-Agent/IP (Cloudfront) chứ không phải do heuristic hay URL sai — thử
+  # playwright fallback (tự động) trước khi nghi ngờ URL.
   - name: "Vinamilk"
     url: "https://www.vinamilk.com.vn/recruitment/career-opportunities"
 
@@ -236,3 +264,15 @@ match_mode: "AND"
 # `locations` phía trên vẫn được semantic engine dùng làm bộ lọc địa điểm.
 # =========================================================================
 matching_engine: "semantic"
+
+# =========================================================================
+# DEBUG MODE — coi MỌI job scrape được là "mới" (bỏ qua state.json hoàn toàn,
+# không đọc lẫn không ghi), nhưng vẫn chạy đầy đủ semantic matching + scoring.
+# Dùng để test/tune taxonomy.yaml/scoring.yaml mà không sợ "đốt" state thật
+# (lần chạy debug xong, state.json KHÔNG bị thay đổi gì).
+#
+# Có thể bật nhanh qua biến môi trường mà không cần sửa file này:
+#   DEBUG_IGNORE_DUPLICATES=true python src/main.py
+# (env var ưu tiên hơn giá trị bên dưới nếu có set)
+# =========================================================================
+debug_ignore_duplicates: false

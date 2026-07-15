@@ -272,3 +272,125 @@ gốc), toàn bộ scraper/ATS adapter, GitHub Actions workflow.
   vào `company_industry_overrides.yaml`.
 - **Tinh chỉnh độ khó tính**: đổi `accept_threshold` hoặc các `weights` trong
   `scoring.yaml`.
+
+---
+
+# v4 — Pipeline reorder, debug mode, richer logging, scraper fixes, fuzzy matching
+
+## 1. Pipeline order đổi (duplicate detection chuyển xuống cuối)
+
+**Trước:** `Scrape -> Duplicate detection -> (skip nếu trùng) -> Semantic matching`
+**Giờ:** `Scrape -> Semantic matching -> Duplicate detection -> Notification`
+
+Cụ thể ở `src/main.py::_process_job()`: MỌI job scrape được (kể cả đã có trong
+`state.json` từ lần chạy trước) đều được đưa qua `matching.engine.evaluate_job()`
+trước. Duplicate chỉ được kiểm tra SAU đó, và chỉ ảnh hưởng đến `notify` (có gửi
+email hay không) — KHÔNG ảnh hưởng đến kết quả matching (`accepted`/`score`/
+`reason`). `mark_seen()` vẫn chạy như cũ (để lần sau còn biết job nào đã thấy).
+
+Lý do: debug table/summary giờ phản ánh đúng CHẤT LƯỢNG MATCHING trên toàn bộ
+dữ liệu scrape được, không bị việc "đã seen từ hôm qua" che mất — 1 job có thể
+vừa "Accepted" vừa "Duplicate" (không notify), thấy rõ trong bảng.
+
+## 2. Debug mode: `DEBUG_IGNORE_DUPLICATES`
+
+`config.yaml` có thêm `debug_ignore_duplicates: false` (mặc định); có thể
+override nhanh bằng biến môi trường `DEBUG_IGNORE_DUPLICATES=true` (env var ưu
+tiên hơn config.yaml). Khi bật:
+
+- `state.json` thật KHÔNG được đọc (`load_state()` không được gọi) — dùng
+  `{"seen": {}}` rỗng thay thế, nên MỌI job đều "mới" (`duplicate=False`).
+- Semantic matching + scoring vẫn chạy đầy đủ như bình thường.
+- `state.json` thật KHÔNG bị ghi đè (`save_state()` không được gọi) — verify
+  bằng test thủ công: `load_state`/`save_state` được mock để đếm số lần gọi,
+  cả 2 đều = 0 khi bật debug mode (xem lịch sử review).
+
+=> Dùng debug mode để tune `config/taxonomy.yaml`/`scoring.yaml` lặp đi lặp lại
+mà không sợ "đốt" state thật (nếu không bật debug, mỗi lần chạy thử sẽ đánh dấu
+job là "đã thấy", lần sau chạy thật sẽ bị bỏ qua oan).
+
+## 3. Debug table + summary mới (`src/matching/report.py`)
+
+Thay vì chỉ in `Accepted: 0` / `Duplicate: 72`, giờ in bảng đầy đủ từng job:
+
+```
+Company     | Title                          | Industry   | Function | Level       | Score | Duplicate | Notify
+Bain        | Business Analyst               | Consulting | Business | Entry-level | 100   | ❌         | ✅
+Grab        | Commercial Planning Associate  | Consumer.. | Product  | Entry-level | 100   | ❌         | ✅
+```
+
+...rồi summary:
+
+```
+Accepted: X
+Notifications sent: X
+Duplicates: X
+Rejected by score: X
+Rejected by function: X
+Rejected by experience: X
+Rejected by location: X
+```
+
+`Accepted` đếm theo kết quả MATCHING (không quan tâm duplicate). `Notifications
+sent` = accepted AND không duplicate — đây là con số thực sự được gửi email.
+
+## 4. Scraper reliability — kết quả điều tra 6 công ty
+
+Điều tra qua web search + fetch trực tiếp (KHÔNG tự đoán/tạo URL) — xem chi
+tiết trong comment tại từng entry trong `config.yaml`:
+
+| Công ty | Vấn đề tìm thấy | Fix |
+|---|---|---|
+| **Grab** | `grab.careers` là site JS tự build (không lỗi, nhưng chậm/không cần thiết) — Grab CŨNG có 1 careers site SmartRecruiters chính chủ, thật, có public API | Đổi URL sang `careers.smartrecruiters.com/Grab` + khai báo `ats_hint: smartrecruiters` -> gọi thẳng API, nhanh + ổn định hơn scrape HTML |
+| **Shopee** | URL cũ `careers.shopee.sg` là site Singapore, không phải Vietnam | Đổi sang `careers.shopee.vn/jobs` (verified qua fanpage chính chủ). Vẫn là SPA -> playwright fallback (đã có sẵn) |
+| **Zalo** | URL cũ `zalo.careers/` chỉ là trang chủ, không có job list | Đổi sang `zalo.careers/jobs` (verified qua LinkedIn chính chủ Zalo). Vẫn là SPA -> playwright fallback |
+| **Monee** | URL cũ `careers.monee.com/careers` sai path | Đổi sang `www.monee.com/jobs` (verified qua job-detail link thật). SPA -> playwright fallback |
+| **McKinsey** | URL cũ `mckinsey.com/careers` là trang giới thiệu, không có job list | Đổi sang `mckinsey.com/careers/search-jobs?countries=Vietnam` (filter sẵn VN). SPA -> playwright fallback |
+| **Vinamilk** | URL ĐÚNG, HTML tĩnh (không cần JS), 36 job hiển thị trực tiếp lúc kiểm tra | Không đổi URL. Nếu vẫn ra 0 job, khả năng cao là bot-blocking theo User-Agent/IP (Cloudfront) — không phải lỗi heuristic hay URL |
+
+**Cải tiến chung (không riêng công ty nào):** `src/scrapers/playwright_scraper.py`
+giờ cuộn xuống đáy trang 4 lần sau khi load xong (`SCROLL_PASSES`) trước khi lấy
+HTML cuối — nhiều site (Shopee/Zalo/Monee/McKinsey) chỉ render batch job đầu
+tiên rồi lazy-load thêm khi cuộn. Đây là hành vi generic (giống người dùng cuộn
+trang thật), áp dụng cho MỌI site dùng infinite-scroll, không phải hardcode
+selector riêng cho công ty nào.
+
+## 5. Semantic matching — giảm phụ thuộc exact keyword
+
+`src/matching/engine.py::_match_confidence()` giờ có 3 tầng thay vì chỉ "khớp
+nguyên văn cụm từ":
+
+1. **Exact phrase** (như trước) — confidence 1.0.
+2. **Token overlap** — synonym nhiều từ chỉ cần >=60% số từ xuất hiện đâu đó
+   trong title/JD (không cần liền nhau/đúng thứ tự). Vd "Merchant Ops Lead"
+   vẫn nhận diện được liên quan tới `operations`/`product` dù không khớp
+   nguyên văn "merchant strategy".
+3. **Fuzzy single-word** — dùng `difflib.SequenceMatcher` cho synonym 1 từ, bắt
+   được biến thể số ít/số nhiều hoặc gần đúng chính tả (vd "Consultants" vẫn
+   nhận ra tương ứng "consultant").
+
+Match yếu (dưới `HARD_FAIL_CONFIDENCE_THRESHOLD = 0.75`) KHÔNG được dùng để
+hard-reject (excluded function / experience) — tránh 1 match mờ nhạt loại oan
+1 job có thể vẫn liên quan; vẫn ảnh hưởng điểm số (thấp hơn) nhưng không tự
+động loại thẳng.
+
+3 test mới minh hoạ trực tiếp: `test_reworded_title_without_exact_synonym_phrase_still_matches_via_token_overlap`,
+`test_plural_variant_of_synonym_matches_via_fuzzy_single_word`,
+`test_weak_fuzzy_match_does_not_hard_reject_as_excluded_function`.
+
+## 6. File thay đổi
+
+| File | Thay đổi |
+|---|---|
+| `src/main.py` | Viết lại pipeline: matching TRƯỚC duplicate detection; thêm debug mode (`DEBUG_IGNORE_DUPLICATES`) |
+| `src/matching/report.py` | Viết lại: bảng debug đầy đủ (Company/Title/Industry/Function/Level/Score/Duplicate/Notify) + summary 7 chỉ số |
+| `src/matching/engine.py` | Thêm `_match_confidence()` 3 tầng (exact/token-overlap/fuzzy); hard-fail chỉ áp dụng khi confidence đủ cao |
+| `src/config.py` | Thêm default `debug_ignore_duplicates: false` |
+| `config.yaml` | Cập nhật URL Grab/Shopee/Zalo/Monee/McKinsey (verified); thêm `ats_hint` cho Grab; thêm `debug_ignore_duplicates` |
+| `src/scrapers/playwright_scraper.py` | Thêm scroll-to-bottom generic (4 lần) để bắt lazy-load/infinite-scroll |
+| `tests/test_matching_engine.py` | Thêm 3 test cho fuzzy/token-overlap matching |
+
+**Không đổi**: cấu trúc GitHub Actions, `notifier.send_email`, ATS adapters hiện
+có, `filters.py` (chế độ legacy vẫn hoạt động y hệt).
+
+**Tổng: 53/53 test pass** (`pytest tests/ -v`).
