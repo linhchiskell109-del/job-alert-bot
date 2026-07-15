@@ -1,0 +1,39 @@
+# =============================================================================
+# COMPANY INDUSTRY OVERRIDES — khai báo THỦ CÔNG ngành của 1 công ty khi biết
+# chắc (nhanh + chính xác hơn để engine tự đoán qua keyword). KHÔNG bắt buộc:
+# công ty không có trong danh sách này sẽ được tự động phân loại ngành bằng
+# `industries.<id>.keywords` trong config/taxonomy.yaml (xem
+# src/matching/engine.py::detect_industry), fallback cuối cùng là "general".
+#
+# Key = đúng chuỗi "name" của công ty trong config.yaml (companies / shared
+# portal brands). Value = industry_id khai báo trong config/taxonomy.yaml.
+# =============================================================================
+
+overrides:
+  # ---------------- Consulting ----------------
+  "McKinsey & Company": consulting
+  "Bain & Company": consulting
+  "Boston Consulting Group (BCG)": consulting
+  "Roland Berger": consulting
+  "KPMG Vietnam": consulting
+  "EY-Parthenon": consulting
+  "PwC Vietnam": consulting
+  "Deloitte Vietnam": consulting
+
+  # ---------------- Consumer tech / fintech ----------------
+  "MoMo (M_Service)": consumer_tech
+  "Grab": consumer_tech
+  "Shopee": consumer_tech
+  "Zalo": consumer_tech
+  "Monee": consumer_tech
+  "VNG": consumer_tech
+  "ZaloPay": banking_fintech
+  "Techcombank": banking_fintech
+
+  # ---------------- FMCG ----------------
+  "Procter & Gamble": fmcg
+  "Masan Consumer Holdings": fmcg
+  "Unilever": fmcg
+  "Nestlé": fmcg
+  "The Coca-Cola Company": fmcg
+  "Vinamilk": fmcg

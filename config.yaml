@@ -216,6 +216,23 @@ locations:
   - "hcm"
   - "ho chi minh"
 
-# match_mode: "AND" -> job phải khớp keyword AND level AND location
+# match_mode: chỉ dùng khi matching_engine = "legacy" bên dưới.
+#             "AND" -> job phải khớp keyword AND level AND location
 #             "keyword_only" -> chỉ cần khớp keyword (bỏ qua level/location)
 match_mode: "AND"
+
+# =========================================================================
+# MATCHING ENGINE — chọn cách chấm job MỚI, dữ liệu ngành/function/level/điểm
+# nằm 100% trong config/taxonomy.yaml + config/scoring.yaml +
+# config/company_industry_overrides.yaml (KHÔNG hard-code trong code Python).
+#   "semantic" (mặc định, khuyến nghị) -> semantic career matching engine:
+#       nhận diện ngành công ty -> chuẩn hoá function (Product/Growth/Marketing/
+#       Trade Marketing/...) -> chuẩn hoá level (entry/mid/senior) -> tính
+#       compatibility score có trọng số -> log giải thích cho từng job (accept
+#       lẫn reject) + báo cáo tổng kết cuối lần chạy.
+#   "legacy" -> filters.job_matches cũ (jd_keywords/levels/locations PASS-FAIL
+#       phía trên) — giữ lại để rollback nhanh nếu semantic engine cần tinh
+#       chỉnh thêm, KHÔNG cần sửa code để chuyển qua lại.
+# `locations` phía trên vẫn được semantic engine dùng làm bộ lọc địa điểm.
+# =========================================================================
+matching_engine: "semantic"

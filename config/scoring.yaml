@@ -1,0 +1,38 @@
+# =============================================================================
+# SCORING — tham số tính compatibility score (0-100) cho matching engine.
+# Đổi số ở đây để tinh chỉnh độ "khó tính" của bot, KHÔNG cần sửa code.
+# =============================================================================
+
+# Tổng các "weights" dưới đây = 100 (điểm tối đa).
+weights:
+  function_match: 45       # job có thuộc 1 function liên quan không (Product/Growth/Marketing/...)
+  industry_alignment: 20   # function đó có "đúng bài" với ngành của công ty không
+                            # (vd Trade Marketing ở FMCG > Trade Marketing ở Consulting)
+  level_match: 25           # có phải entry-level (hoặc tương đương) không
+  location_match: 10        # có ở địa điểm mong muốn không
+
+# Điểm tối thiểu để 1 job được ACCEPT (sau khi cộng các weight ở trên).
+accept_threshold: 60
+
+# Hệ số điểm khi job KHỚP function nhưng function đó KHÔNG nằm trong
+# relevant_functions của ngành đã detect (vẫn có thể liên quan, chỉ không phải
+# "đúng bài" — vd Marketing tại 1 công ty Consulting).
+partial_industry_alignment_ratio: 0.4
+
+# Nếu job không tìm thấy level nào khớp (không đề cập level trong title/JD) thì
+# coi là "không rõ" — cho ratio trung tính này thay vì loại thẳng, vì nhiều job
+# không ghi level trong title.
+unknown_level_ratio: 0.5
+
+# Nếu không cấu hình `locations` trong config.yaml (danh sách rỗng) thì coi như
+# không lọc theo địa điểm -> location_match luôn full điểm.
+no_location_filter_ratio: 1.0
+
+# Thứ tự log rejection reason khi 1 job bị loại vì nhiều lý do cùng lúc — dùng lý
+# do XUẤT HIỆN ĐẦU TIÊN trong danh sách này làm reason chính thức trong report.
+rejection_reason_priority:
+  - excluded_function   # job thuộc function bị loại hẳn (Engineering/HR/Legal/Finance thuần)
+  - location             # không đúng địa điểm mong muốn
+  - experience            # level quá cao (Senior/Manager+) so với target entry-level
+  - keyword               # không tìm thấy function nào liên quan trong title/JD
+  - score_too_low         # có match nhưng tổng điểm dưới accept_threshold

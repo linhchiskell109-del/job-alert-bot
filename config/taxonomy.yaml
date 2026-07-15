@@ -1,0 +1,383 @@
+# =============================================================================
+# TAXONOMY — nguồn dữ liệu DUY NHẤT cho matching engine (src/matching/engine.py).
+# =============================================================================
+# Toàn bộ khái niệm "ngành nào", "function nào tương đương title nào", "level nào
+# tương đương title nào" đều khai báo ở ĐÂY, KHÔNG hard-code trong Python.
+# Muốn thêm 1 ngành mới / 1 function mới / 1 cách gọi title mới -> sửa file này,
+# không cần đụng code.
+#
+# Cấu trúc:
+#   industries.<industry_id>
+#     display_name        : tên hiển thị trong log
+#     keywords             : từ khoá xuất hiện trong title/JD giúp NHẬN DIỆN ngành
+#                             (dùng khi công ty không có trong company_overrides.yaml)
+#     relevant_functions   : danh sách function_id được coi là "đúng ngành" cho
+#                             industry này (dùng để tính industry_alignment)
+#
+#   functions.<function_id>
+#     display_name
+#     synonyms              : mọi cách gọi title/JD được coi là thuộc function này,
+#                              trên MỌI công ty/ngành (không phân biệt hoa thường,
+#                              không dấu — xem src/textnorm.py)
+#     excluded               : true -> function này KHÔNG BAO GIỜ được chấp nhận dù
+#                              ở ngành nào (vd Engineering, Legal, HR thuần) — job
+#                              khớp function này bị loại ngay ở bước "keyword"
+#
+#   levels.<level_id>
+#     display_name
+#     synonyms
+#     weight                 : 0.0 - 1.0, dùng trong scoring.yaml (level_match)
+#     eligible                : true -> level này được coi là "phù hợp" (entry-level
+#                              target); false -> vẫn nhận diện được nhưng bị điểm thấp
+#                              (vd senior/manager trở lên)
+# =============================================================================
+
+industries:
+  consulting:
+    display_name: "Consulting"
+    keywords:
+      - "consulting"
+      - "advisory"
+      - "management consulting"
+      - "strategy consulting"
+    relevant_functions:
+      - consulting
+      - strategy
+      - business
+
+  consumer_tech:
+    display_name: "Consumer Tech / Platform"
+    keywords:
+      - "e-commerce"
+      - "ecommerce"
+      - "super app"
+      - "fintech"
+      - "digital wallet"
+      - "platform"
+      - "marketplace"
+    relevant_functions:
+      - product
+      - growth
+      - commercial
+      - strategy
+      - operations
+      - partnerships
+      - business
+
+  banking_fintech:
+    display_name: "Banking / Fintech"
+    keywords:
+      - "bank"
+      - "banking"
+      - "fintech"
+      - "payments"
+      - "digital banking"
+    relevant_functions:
+      - product
+      - commercial
+      - strategy
+      - operations
+      - partnerships
+      - business
+      - finance
+
+  fmcg:
+    display_name: "FMCG"
+    keywords:
+      - "fmcg"
+      - "consumer goods"
+      - "cpg"
+      - "fast moving consumer goods"
+    relevant_functions:
+      - marketing
+      - brand
+      - commercial
+      - category
+      - trade_marketing
+      - revenue_growth
+      - consumer_insights
+      - innovation
+
+  general:
+    display_name: "General / Unclassified"
+    keywords: []
+    relevant_functions:
+      - product
+      - growth
+      - commercial
+      - strategy
+      - business
+      - marketing
+      - operations
+      - consulting
+
+functions:
+  product:
+    display_name: "Product"
+    synonyms:
+      - "product manager"
+      - "product owner"
+      - "associate product manager"
+      - "apm"
+      - "product executive"
+      - "product specialist"
+      - "product operations"
+      - "commercial planning associate"
+      - "merchant strategy"
+      - "business product"
+      - "platform strategy"
+      - "product analyst"
+      - "digital product"
+      - "consumer product"
+      - "growth product"
+      - "platform product"
+
+  growth:
+    display_name: "Growth"
+    synonyms:
+      - "growth"
+      - "growth marketing"
+      - "growth strategy"
+      - "growth operations"
+      - "user growth"
+      - "business growth"
+      - "commercial growth"
+      - "growth associate"
+      - "growth executive"
+      - "growth analyst"
+      - "merchant growth"
+
+  commercial:
+    display_name: "Commercial"
+    synonyms:
+      - "commercial"
+      - "commercial planning"
+      - "commercial excellence"
+      - "commercial associate"
+      - "commercial executive"
+      - "business development"
+      - "bizdev"
+      - "partnership"
+      - "partnerships"
+      - "ecosystem"
+
+  strategy:
+    display_name: "Strategy"
+    synonyms:
+      - "strategy"
+      - "strategic"
+      - "strategy consulting"
+      - "business consulting"
+      - "management consulting"
+      - "transformation"
+      - "transformation office"
+      - "business transformation"
+      - "corporate strategy"
+      - "internal consulting"
+      - "venture"
+      - "venture builder"
+      - "venture studio"
+      - "innovation"
+
+  business:
+    display_name: "Business / Analyst"
+    synonyms:
+      - "business analyst"
+      - "analyst"
+      - "product analyst"
+      - "growth analyst"
+      - "data analyst"
+      - "strategy analyst"
+      - "business associate"
+
+  consulting:
+    display_name: "Consulting career ladder"
+    synonyms:
+      - "business analyst"
+      - "associate"
+      - "associate consultant"
+      - "junior consultant"
+      - "digital consultant"
+      - "implementation associate"
+      - "consultant"
+      - "analyst"
+
+  marketing:
+    display_name: "Marketing"
+    synonyms:
+      - "marketing"
+      - "marketing executive"
+      - "marketing associate"
+      - "digital marketing"
+      - "performance marketing"
+
+  brand:
+    display_name: "Brand"
+    synonyms:
+      - "brand"
+      - "brand executive"
+      - "brand associate"
+      - "brand management"
+
+  category:
+    display_name: "Category Management"
+    synonyms:
+      - "category"
+      - "category executive"
+      - "category management"
+      - "category development"
+
+  trade_marketing:
+    display_name: "Trade / Shopper Marketing"
+    synonyms:
+      - "trade marketing"
+      - "trade marketing executive"
+      - "shopper marketing"
+      - "customer development"
+      - "sales development"
+
+  revenue_growth:
+    display_name: "Revenue Growth Management"
+    synonyms:
+      - "revenue growth management"
+      - "rgm"
+      - "revenue management"
+
+  consumer_insights:
+    display_name: "Consumer Insights"
+    synonyms:
+      - "consumer insights"
+      - "market research"
+      - "insights"
+      - "shopper insights"
+
+  partnerships:
+    display_name: "Partnerships"
+    synonyms:
+      - "partnership"
+      - "partnerships"
+      - "alliances"
+      - "business development"
+      - "bizdev"
+
+  operations:
+    display_name: "Operations"
+    synonyms:
+      - "operations"
+      - "operation"
+      - "ops"
+      - "program management"
+      - "project management"
+      - "supply chain"
+
+  finance:
+    display_name: "Finance"
+    excluded: true
+    synonyms:
+      - "finance executive"
+      - "accountant"
+      - "accounting"
+      - "financial analyst"
+      - "treasury"
+      - "audit"
+      - "tax"
+
+  engineering:
+    display_name: "Engineering (không liên quan)"
+    excluded: true
+    synonyms:
+      - "software engineer"
+      - "backend engineer"
+      - "frontend engineer"
+      - "fullstack engineer"
+      - "full stack engineer"
+      - "mobile engineer"
+      - "ios engineer"
+      - "android engineer"
+      - "data engineer"
+      - "devops"
+      - "site reliability"
+      - "sre"
+      - "qa engineer"
+      - "test engineer"
+      - "machine learning engineer"
+      - "ml engineer"
+      - "infrastructure engineer"
+      - "security engineer"
+
+  hr:
+    display_name: "Human Resources (không liên quan)"
+    excluded: true
+    synonyms:
+      - "human resources"
+      - "hr executive"
+      - "hr business partner"
+      - "recruiter"
+      - "talent acquisition"
+      - "c&b"
+      - "compensation and benefits"
+
+  legal:
+    display_name: "Legal (không liên quan)"
+    excluded: true
+    synonyms:
+      - "legal counsel"
+      - "legal executive"
+      - "compliance officer"
+      - "paralegal"
+
+levels:
+  entry_level:
+    display_name: "Entry-level"
+    eligible: true
+    weight: 1.0
+    synonyms:
+      - "associate"
+      - "executive"
+      - "specialist"
+      - "coordinator"
+      - "intern"
+      - "internship"
+      - "graduate"
+      - "graduate program"
+      - "management associate"
+      - "management trainee"
+      - "trainee"
+      - "fresh graduate"
+      - "fresher"
+      - "entry level"
+      - "entry-level"
+      - "junior"
+      - "new grad"
+      - "campus"
+      - "early career"
+      - "rotation"
+      - "rotational"
+      - "apm"
+      - "business analyst"
+      - "analyst"
+
+  mid_level:
+    display_name: "Mid-level"
+    eligible: false
+    weight: 0.4
+    synonyms:
+      - "senior associate"
+      - "senior consultant"
+      - "assistant manager"
+      - "team lead"
+      - "supervisor"
+
+  senior_level:
+    display_name: "Senior / Management"
+    eligible: false
+    weight: 0.05
+    synonyms:
+      - "manager"
+      - "senior manager"
+      - "director"
+      - "head of"
+      - "vice president"
+      - "vp"
+      - "principal"
+      - "chief"

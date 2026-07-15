@@ -19,6 +19,9 @@ def load_config(path: str = CONFIG_PATH) -> dict:
     config.setdefault("levels", [])
     config.setdefault("locations", [])
     config.setdefault("match_mode", "AND")
+    # "semantic" (mặc định) -> matching/engine.py (data-driven, xem config/taxonomy.yaml
+    # + config/scoring.yaml). "legacy" -> filters.job_matches cũ (keyword/level/location).
+    config.setdefault("matching_engine", "semantic")
 
     # Chuẩn hoá URL (bỏ tracking param như utm_/fbclid/gclid/srsltid) ngay khi load,
     # để mọi nơi dùng config.yaml sau đó đều thấy URL đã sạch.
