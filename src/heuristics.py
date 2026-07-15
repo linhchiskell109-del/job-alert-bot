@@ -156,6 +156,78 @@ def _find_location_near(anchor) -> str:
     return ""
 
 
+GENERIC_ROW_TEXT_BLOCKLIST = (
+    "learn more", "share this job", "linkedin", "facebook", "instagram",
+    "youtube", "email", "twitter", "apply now", "view job", "x",
+)
+
+
+def _nearby_raw_text(anchor, title: str) -> str:
+    """Lấy text thô xung quanh anchor (location/department/employment type
+    thường nằm rời rạc cạnh title, không có class/id nhận diện được ổn định
+    giữa các site) để Normalize layer (src/normalize.py) tách tiếp — dùng cho
+    extract_jobs_by_strict_url_pattern() bên dưới. Đi lên tối đa 3 cấp cha,
+    dừng ở block đầu tiên có text NHIỀU HƠN title (tức có thêm thông tin)."""
+    node = anchor
+    for _ in range(3):
+        if node is None or node.parent is None:
+            break
+        node = node.parent
+        text = _clean_text(node.get_text(" "))
+        if len(text) > len(title) + 2:
+            remainder = text.replace(title, " ")
+            for phrase in GENERIC_ROW_TEXT_BLOCKLIST:
+                remainder = re.sub(re.escape(phrase), " ", remainder, flags=re.IGNORECASE)
+            remainder = _clean_text(remainder)
+            remainder = remainder.strip(" :,-–—|")
+            if remainder:
+                return remainder[:120]
+    return ""
+
+
+def extract_jobs_by_strict_url_pattern(html: str, base_url: str, company: str,
+                                        url_pattern) -> list[dict]:
+    """Biến thể NGHIÊM NGẶT của extract_jobs_from_html(), dùng cho các "ATS-class"
+    parser đã biết rõ pattern URL chi tiết job (có ID số/slug thật — vd Avature
+    '/jobs/FolderDetail/<slug>/<id>', SuccessFactors '/job/<slug>/<id>/'), THAY
+    VÌ heuristic từ khoá path lỏng lẻo (dễ khớp nhầm nav link như "Explore",
+    "Show all jobs" nếu path chứa từ khoá job/careers mà không có ID cụ thể).
+
+    location trả về là RAW TEXT xung quanh anchor (chưa tách employment_type/
+    department) — bước Normalize (src/normalize.py) sẽ tách tiếp thành field
+    riêng biệt, xem pipeline.py."""
+    if not html:
+        return []
+
+    soup = BeautifulSoup(html, "lxml")
+    seen_urls = set()
+    jobs = []
+
+    for anchor in soup.find_all("a", href=True):
+        href = anchor["href"]
+        abs_url = normalize_url(urljoin(base_url, href))
+        if not url_pattern.search(abs_url):
+            continue
+        if abs_url in seen_urls:
+            continue
+
+        title = _extract_title(anchor)
+        if not title or len(title) < MIN_TITLE_LEN or title.lower() in GENERIC_ANCHOR_TEXT:
+            continue
+
+        seen_urls.add(abs_url)
+        jobs.append({
+            "company": company,
+            "title": title,
+            "url": abs_url,
+            "location": _nearby_raw_text(anchor, title),
+            "department": "",
+            "description": "",
+        })
+
+    return jobs
+
+
 def extract_jobs_from_html(html: str, base_url: str, company: str, extra_keywords: tuple = ()) -> list[dict]:
     if not html:
         return []

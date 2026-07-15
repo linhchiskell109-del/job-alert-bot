@@ -1,0 +1,80 @@
+# =============================================================================
+# NORMALIZE — dữ liệu để tách 1 job "thô" (title/location đôi khi bị dính liền
+# thành 1 chuỗi do scraper heuristic gom text, vd "Hồ Chí MinhFulltimeSenior
+# Manager Product Marketing") thành các field riêng biệt: title / location /
+# employment_type / department. src/normalize.py chỉ chứa thuật toán tách
+# chuỗi áp dụng chung, không hard-code tên thành phố/loại hình công việc nào.
+# =============================================================================
+
+# Mỗi employment_type: danh sách cách viết (không phân biệt hoa thường/dấu)
+# xuất hiện DÍNH LIỀN hoặc cách nhau bởi khoảng trắng trong text thô. Sắp xếp
+# theo canonical form hiển thị lại cho người dùng (vd "Full-time").
+employment_types:
+  "Full-time":
+    - "full time"
+    - "fulltime"
+    - "full-time"
+    - "toàn thời gian"
+    - "toan thoi gian"
+  "Part-time":
+    - "part time"
+    - "parttime"
+    - "part-time"
+    - "bán thời gian"
+    - "ban thoi gian"
+  "Internship":
+    - "internship"
+    - "intern"
+    - "thực tập"
+    - "thuc tap"
+  "Contract":
+    - "contract"
+    - "contractor"
+    - "hợp đồng"
+    - "hop dong"
+    - "thời vụ"
+    - "thoi vu"
+  "Temporary":
+    - "temporary"
+    - "temp"
+
+# Danh sách địa danh hay bị dính liền vào đầu chuỗi title thô (thường do
+# heuristic scraper gom text location + title lại làm 1). Value là canonical
+# form dùng để hiển thị lại; key là các biến thể viết (không dấu/không dấu +
+# viết tắt) sẽ được nhận diện.
+known_locations:
+  "Ho Chi Minh City":
+    - "hồ chí minh"
+    - "ho chi minh"
+    - "tp hồ chí minh"
+    - "tp. hồ chí minh"
+    - "hcmc"
+    - "hcm"
+  "Hanoi":
+    - "hà nội"
+    - "ha noi"
+    - "hn"
+  "Da Nang":
+    - "đà nẵng"
+    - "da nang"
+  "Can Tho":
+    - "cần thơ"
+    - "can tho"
+  "Hai Phong":
+    - "hải phòng"
+    - "hai phong"
+  "Singapore":
+    - "singapore"
+  "Bangkok":
+    - "bangkok"
+  "Kuala Lumpur":
+    - "kuala lumpur"
+  "Jakarta":
+    - "jakarta"
+  "Manila":
+    - "manila"
+  "Remote":
+    - "remote"
+    - "work from home"
+    - "làm việc từ xa"
+    - "lam viec tu xa"

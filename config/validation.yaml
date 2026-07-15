@@ -1,0 +1,138 @@
+# =============================================================================
+# VALIDATION — quy tắc xác định 1 job "thô" (đã normalize) có phải là 1 JOB
+# POSTING THẬT hay chỉ là trang điều hướng/menu (nav page) bị lọt vào do scraper
+# quá lỏng lẻo. Dữ liệu 100% ở đây — src/validation.py chỉ chứa thuật toán áp
+# dụng chung, không hard-code từ khoá nào.
+# =============================================================================
+
+# Job phải có ĐỦ các field này (sau khi trim) mới được coi là hợp lệ.
+# "location_or_country" nghĩa là chỉ cần 1 trong 2 field "location"/"country"
+# có giá trị, không cần cả 2.
+required_fields:
+  - title
+  - url
+required_any_of:
+  - [location, country]
+
+min_title_length: 4
+max_title_length: 140
+
+# =============================================================================
+# BLOCKLIST — nếu TOÀN BỘ title (sau chuẩn hoá) TRÙNG hoặc gần như trùng 1 cụm
+# trong danh sách này, hoặc title CHỈ chứa các từ điều hướng này mà không có
+# nội dung job nào khác, job bị loại. Đây là literal nav/menu text các site
+# careers hay dùng (nút "Explore", "Apply Now", breadcrumb "Careers", v.v.),
+# KHÔNG phải tên chức danh — job title thật gần như không bao giờ trùng khớp
+# các cụm này.
+# =============================================================================
+nav_blocklist_phrases:
+  # ---- English ----
+  - "privacy"
+  - "privacy policy"
+  - "cookie"
+  - "cookies"
+  - "cookie policy"
+  - "cookie notice"
+  - "benefits"
+  - "career"
+  - "careers"
+  - "careers home"
+  - "explore"
+  - "explore our work areas"
+  - "explore our integrated teams"
+  - "learn more"
+  - "read more"
+  - "read less"
+  - "students"
+  - "graduates"
+  - "graduates / students"
+  - "blog"
+  - "stories"
+  - "our stories"
+  - "life at"
+  - "hiring process"
+  - "our hiring process"
+  - "find jobs"
+  - "find a role"
+  - "search jobs"
+  - "search job"
+  - "job search"
+  - "work with us"
+  - "work at"
+  - "apply now"
+  - "apply here"
+  - "show all jobs"
+  - "view all jobs"
+  - "see all jobs"
+  - "all jobs"
+  - "sign up"
+  - "sign in"
+  - "log in"
+  - "login"
+  - "register"
+  - "contact us"
+  - "about us"
+  - "faqs"
+  - "faq"
+  - "terms & conditions"
+  - "terms and conditions"
+  - "terms of use"
+  - "career areas"
+  - "our teams"
+  - "meet our teams"
+  - "why join"
+  - "why join us"
+  - "what you can do here"
+  - "what you can do"
+  - "how we hire"
+  - "our culture"
+  - "life at"
+  - "diversity"
+  - "events"
+  - "talent community"
+  - "join our talent community"
+  - "join now"
+  - "clear search results"
+  - "share this job"
+  - "next"
+  - "previous"
+  - "back to search results"
+  - "skip to content"
+  - "skip to main content"
+
+  # ---- Vietnamese ----
+  - "tìm công việc"
+  - "tim cong viec"
+  - "tìm việc"
+  - "tim viec"
+  - "tìm việc làm"
+  - "tuyển dụng"
+  - "tuyen dung"
+  - "cơ hội nghề nghiệp"
+  - "co hoi nghe nghiep"
+  - "chính sách bảo mật"
+  - "chinh sach bao mat"
+  - "quyền riêng tư"
+  - "quyen rieng tu"
+  - "chính sách cookie"
+  - "điều khoản sử dụng"
+  - "dieu khoan su dung"
+  - "khám phá"
+  - "kham pha"
+  - "tìm hiểu thêm"
+  - "tim hieu them"
+  - "xem thêm"
+  - "xem tất cả"
+  - "xem tat ca"
+  - "ứng tuyển ngay"
+  - "ung tuyen ngay"
+  - "liên hệ"
+  - "lien he"
+  - "về chúng tôi"
+  - "ve chung toi"
+  - "câu hỏi thường gặp"
+
+# =============================================================================
+# Nếu title (sau khi bỏ blocklist phrase khớp) còn lại QUÁ NGẮN (dưới
+# min_title_length) thì vẫn coi là "chỉ có nav text" -> loại.
+# =============================================================================

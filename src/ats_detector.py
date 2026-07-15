@@ -1,20 +1,28 @@
 """Tự động phát hiện ATS platform từ URL hoặc HTML — người dùng KHÔNG cần khai báo
 thủ công công ty nào dùng nền tảng gì.
 
-Hỗ trợ nhận diện: Workday, Greenhouse, Lever, SmartRecruiters (có adapter public
-API riêng — xem scrapers/), và SAP SuccessFactors, Oracle Recruiting Cloud (chỉ
-NHẬN DIỆN để log/route đúng hướng — 2 nền tảng này không có API JSON công khai ổn
-định không cần xác thực, nên pipeline sẽ route sang html_scraper/playwright thay
-vì cố gọi API).
+Hỗ trợ nhận diện: Workday, Greenhouse, Lever, SmartRecruiters, Avature, SAP
+SuccessFactors (đều có adapter public/structured — xem scrapers/), và Oracle
+Recruiting Cloud (chỉ NHẬN DIỆN để log/route đúng hướng — nền tảng này không có
+API/trang tĩnh công khai ổn định không cần xác thực theo hiểu biết hiện tại,
+nên pipeline route sang html_scraper/playwright thay vì cố gọi API).
 
 Cách hoạt động:
 1. Thử match pattern trực tiếp trên URL company (nhanh, không cần tải trang nếu
    URL đã là URL của ATS, vd career page redirect thẳng sang myworkdayjobs.com).
 2. Nếu không match, tải HTML trang career và tìm dấu hiệu nhúng ATS (iframe/script
-   src trỏ tới greenhouse/lever/smartrecruiters/successfactors/oracle, hoặc link
-   trực tiếp tới domain ATS đó).
+   src trỏ tới greenhouse/lever/smartrecruiters/successfactors/avature/oracle,
+   hoặc link trực tiếp tới domain ATS đó).
 3. Nếu vẫn không phát hiện được -> coi là trang tự build, trả về loại "html" để
    pipeline dùng html_scraper (rồi playwright nếu cần).
+
+Avature và SuccessFactors là platform "trắng nhãn" (white-label) — domain KHÔNG
+chứa tên platform (vd careers.bain.com dùng Avature, jobs.sea.deloitte.com dùng
+SuccessFactors) nên chỉ nhận diện được qua DẤU HIỆU TRONG HTML (meta tag /
+asset domain), không qua URL company. Khi phát hiện qua HTML, params luôn gồm
+`base_url` = chính URL đang xét (KHÔNG suy đoán/tạo domain nào khác) để adapter
+tương ứng (scrapers/avature.py, scrapers/successfactors_csb.py) dùng làm điểm
+xuất phát scrape.
 
 KHÔNG BAO GIỜ tự đoán/tạo tenant, board token, hay domain — mọi params đều được
 trích xuất trực tiếp từ URL/HTML thật sự quan sát được, không suy đoán.
@@ -45,10 +53,16 @@ SMARTRECRUITERS_PATTERNS = [
     re.compile(r"jobs\.smartrecruiters\.com/([\w-]+)"),
 ]
 
-# SAP SuccessFactors (Career Site Builder) và Oracle Recruiting Cloud không có API
-# JSON công khai ổn định (không cần xác thực) theo hiểu biết hiện tại — nên chỉ
-# nhận diện để LOG cho đúng, không có adapter riêng. Pipeline tự route các ATS
-# này sang html_scraper/playwright.
+# Avature: platform trắng nhãn, phát hiện qua meta tag đặc trưng "avature.portal.*"
+# do chính Avature nhúng vào mọi trang portal (xác minh trên careers.bain.com).
+AVATURE_PATTERN = re.compile(
+    r"avature\.portal\.(?:id|name|urlpath|lang)|careers\.avature\.net",
+    re.IGNORECASE,
+)
+
+# SAP SuccessFactors (Career Site Builder): phát hiện qua domain CDN asset đặc
+# trưng "rmkcdn.successfactors.com" (xác minh trên jobs.sea.deloitte.com) hoặc
+# các dấu hiệu URL/param khác của SuccessFactors.
 SUCCESSFACTORS_PATTERN = re.compile(
     r"successfactors\.com|career_ns=job_listing|sfcareersite|universalcareersite",
     re.IGNORECASE,
@@ -59,20 +73,20 @@ ORACLE_RECRUITING_PATTERNS = [
     re.compile(r"eeho\.fa\.[\w-]+\.oraclecloud\.com", re.IGNORECASE),
 ]
 
-# ATS có adapter public API riêng (xem pipeline.ATS_ADAPTERS)
-ADAPTER_SUPPORTED_ATS = {"workday", "greenhouse", "lever", "smartrecruiters"}
-# ATS nhận diện được nhưng KHÔNG có adapter public API -> route sang html/playwright
-DETECTED_ONLY_ATS = {"successfactors", "oracle_recruiting"}
+# ATS có adapter structured data riêng (xem pipeline.ATS_ADAPTERS)
+ADAPTER_SUPPORTED_ATS = {"workday", "greenhouse", "lever", "smartrecruiters", "avature", "successfactors"}
+# ATS nhận diện được nhưng KHÔNG có adapter -> route sang html/playwright
+DETECTED_ONLY_ATS = {"oracle_recruiting"}
 
 
 @dataclass
 class AtsMatch:
     ats: str                       # "workday" | "greenhouse" | "lever" | "smartrecruiters"
-                                    # | "successfactors" | "oracle_recruiting" | "html"
+                                    # | "avature" | "successfactors" | "oracle_recruiting" | "html"
     params: dict = field(default_factory=dict)
 
 
-def _match_in(text: str):
+def _match_in(text: str, source_url: str = ""):
     m = WORKDAY_RE.search(text)
     if m:
         tenant, wd_number, site = m.groups()
@@ -97,20 +111,26 @@ def _match_in(text: str):
         if pattern.search(text):
             return AtsMatch("oracle_recruiting", {})
 
+    # Avature/SuccessFactors là white-label -> không trích được token/tenant từ
+    # regex group, chỉ biết ĐÂY LÀ platform gì. Adapter dùng thẳng base_url
+    # (chính URL công ty đã cấu hình trong config.yaml) làm điểm xuất phát.
+    if AVATURE_PATTERN.search(text):
+        return AtsMatch("avature", {"base_url": source_url})
+
     if SUCCESSFACTORS_PATTERN.search(text):
-        return AtsMatch("successfactors", {})
+        return AtsMatch("successfactors", {"base_url": source_url})
 
     return None
 
 
 def detect(url: str) -> AtsMatch:
-    direct = _match_in(url)
+    direct = _match_in(url, source_url=url)
     if direct:
         return direct
 
     html = get_safe(url)
     if html:
-        detected = _match_in(html)
+        detected = _match_in(html, source_url=url)
         if detected:
             return detected
 

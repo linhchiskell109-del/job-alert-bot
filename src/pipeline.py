@@ -1,15 +1,28 @@
 """Pipeline xử lý 1 công ty:
+
 0. Kiểm tra URL career có truy cập được không — nếu KHÔNG, log cảnh báo và BỎ QUA
    công ty này ngay (không tự đoán URL khác, không chạy tiếp các bước sau).
-1. Auto-detect ATS (Workday/Greenhouse/Lever/SmartRecruiters/SAP SuccessFactors/
-   Oracle Recruiting) từ URL — nếu là ATS có adapter public API (Workday/
-   Greenhouse/Lever/SmartRecruiters), dùng thẳng API đó (nhanh, ổn định, không
-   cần parse HTML). SuccessFactors/Oracle Recruiting được NHẬN DIỆN (log rõ) nhưng
-   không có adapter public API tin cậy, nên route tiếp xuống bước 2.
-2. html_scraper (requests + BeautifulSoup, heuristic tự nhận diện job link) —
+1. Auto-detect ATS (Workday/Greenhouse/Lever/SmartRecruiters/Avature/SAP
+   SuccessFactors/Oracle Recruiting) từ URL — nếu là ATS có adapter (Workday/
+   Greenhouse/Lever/SmartRecruiters/Avature/SuccessFactors), dùng thẳng
+   adapter đó (nhanh, ổn định, ít nguy cơ nhặt nhầm nav link hơn heuristic
+   chung). Oracle Recruiting được NHẬN DIỆN (log rõ) nhưng chưa có adapter tin
+   cậy, nên route tiếp xuống bước 2.
+2. Company-specific parser (nếu công ty có khai báo trong
+   COMPANY_PARSER_OVERRIDES bên dưới — dùng cho site JS SPA chưa xác định
+   được ATS/API, cần lọc NGHIÊM NGẶT HƠN heuristic chung để tránh nhặt nhầm
+   nav link, xem scrapers/strict_html.py).
+3. html_scraper (requests + BeautifulSoup, heuristic tự nhận diện job link) —
    LUÔN được thử trước khi dùng trình duyệt thật, vì rẻ và nhanh hơn nhiều.
-3. Nếu html_scraper trả về 0 job -> fallback playwright_scraper (render JS rồi áp
+4. Nếu html_scraper trả về 0 job -> fallback playwright_scraper (render JS rồi áp
    dụng CÙNG heuristic).
+5. Normalize -> Validate: MỌI job từ bất kỳ nguồn nào ở trên (ATS/company
+   parser/html/playwright) đều đi qua normalize_job() (tách title/location/
+   employment_type từ text thô) rồi validate_job() (loại nav/menu page, job
+   thiếu field bắt buộc) TRƯỚC KHI trả về cho main.py đưa vào matching engine —
+   xem normalize.py + validation.py. Đây là lớp bảo vệ ĐỘC LẬP với parser,
+   nên dù 1 parser nào đó (kể cả tương lai) lỡ nhặt nhầm nav link, job đó vẫn
+   bị chặn lại ở đây, không bao giờ tới được matching engine.
 
 Không có bước nào trong pipeline này yêu cầu người dùng khai báo CSS selector hay
 loại ATS thủ công, và không có bước nào tự tạo ra URL/domain không có thật.
@@ -19,22 +32,65 @@ brand/công ty (vd VNG + ZaloPay cùng đăng trên career.vng.com.vn): scrape M
 rồi phân loại job theo brand bằng từ khoá, thay vì crawl cùng 1 trang nhiều lần.
 """
 from ats_detector import DETECTED_ONLY_ATS, detect
-from scrapers import greenhouse, html_scraper, lever, playwright_scraper, smartrecruiters, workday
+from normalize import normalize_job
+from scrapers import (
+    avature,
+    greenhouse,
+    html_scraper,
+    lever,
+    playwright_scraper,
+    smartrecruiters,
+    strict_html,
+    successfactors_csb,
+    workday,
+)
 from textnorm import normalize
 from url_utils import is_url_reachable
+from validation import validate_job
 
 ATS_ADAPTERS = {
     "workday": workday.fetch,
     "greenhouse": greenhouse.fetch,
     "lever": lever.fetch,
     "smartrecruiters": smartrecruiters.fetch,
+    "avature": avature.fetch,
+    "successfactors": successfactors_csb.fetch,
 }
+
+# Công ty cần parser "nghiêm ngặt hơn" heuristic mặc định (career site render
+# JS, chưa xác định được ATS/API public — xem scrapers/strict_html.py). Được
+# thử SAU bước ATS detect, TRƯỚC khi rơi xuống html_scraper/playwright mặc
+# định. Key phải khớp CHÍNH XÁC "name" trong config.yaml.
+COMPANY_PARSER_OVERRIDES = {
+    "Boston Consulting Group (BCG)": strict_html.fetch,
+    "The Coca-Cola Company": strict_html.fetch,
+    "Techcombank": strict_html.fetch,
+    "VNG Careers Portal": strict_html.fetch,  # shared portal — xem run_for_shared_portal(); key phải khớp "name" của portal, không phải brand "VNG"
+}
+
+
+def _normalize_and_validate(jobs: list, company: str) -> list:
+    """Normalize -> Validate — bước cuối cùng trước khi job rời khỏi pipeline
+    scraping, áp dụng ĐỒNG NHẤT cho MỌI nguồn (ATS/company parser/html/
+    playwright). Job không hợp lệ (nav/menu page, thiếu field bắt buộc) bị
+    loại và log rõ lý do để dễ debug scraper."""
+    valid_jobs = []
+    for job in jobs:
+        normalized = normalize_job(job)
+        result = validate_job(normalized)
+        if result.is_valid:
+            valid_jobs.append(normalized)
+        else:
+            title_preview = (job.get("title") or "")[:60]
+            print(f"  [DISCARD] {company} — \"{title_preview}\" -> {result.reason}")
+    return valid_jobs
 
 
 def run_for_company(company_cfg: dict, extra_keywords: tuple = ()) -> tuple[list[dict], str]:
     """Trả về (jobs, method_used). method_used dùng để log — giúp biết công ty nào
     đang phải fallback Playwright (tốn tài nguyên hơn), hoặc URL nào bị chết,
-    không phải để người dùng cấu hình lại gì cả."""
+    không phải để người dùng cấu hình lại gì cả. Jobs trả về LUÔN đã qua
+    Normalize + Validate (xem _normalize_and_validate)."""
     name = company_cfg["name"]
     url = company_cfg["url"]
 
@@ -53,15 +109,23 @@ def run_for_company(company_cfg: dict, extra_keywords: tuple = ()) -> tuple[list
         ats, params = match.ats, match.params
 
     if ats in DETECTED_ONLY_ATS:
-        print(f"[INFO] {name}: phát hiện ATS '{ats}' nhưng không có public API tin cậy -> dùng HTML/Playwright")
+        print(f"[INFO] {name}: phát hiện ATS '{ats}' nhưng chưa có adapter tin cậy -> dùng HTML/Playwright")
 
     if ats in ATS_ADAPTERS:
         try:
             jobs = ATS_ADAPTERS[ats](name, params)
             if jobs:
-                return jobs, ats
+                return _normalize_and_validate(jobs, name), ats
         except Exception as e:
-            print(f"[WARN] {name}: adapter '{ats}' lỗi ({e}) -> fallback HTML scraper")
+            print(f"[WARN] {name}: adapter '{ats}' lỗi ({e}) -> fallback parser khác")
+
+    if name in COMPANY_PARSER_OVERRIDES:
+        try:
+            jobs = COMPANY_PARSER_OVERRIDES[name](url, name, extra_keywords)
+            if jobs:
+                return _normalize_and_validate(jobs, name), "company_parser"
+        except Exception as e:
+            print(f"[WARN] {name}: company-specific parser lỗi ({e}) -> fallback HTML scraper")
 
     try:
         jobs = html_scraper.fetch(url, name, extra_keywords)
@@ -70,11 +134,11 @@ def run_for_company(company_cfg: dict, extra_keywords: tuple = ()) -> tuple[list
         jobs = []
 
     if jobs:
-        return jobs, "html"
+        return _normalize_and_validate(jobs, name), "html"
 
     try:
         jobs = playwright_scraper.fetch(url, name, extra_keywords)
-        return jobs, ("playwright" if jobs else "none")
+        return _normalize_and_validate(jobs, name), ("playwright" if jobs else "none")
     except Exception as e:
         print(f"[ERROR] {name}: playwright fallback cũng lỗi ({e})")
         return [], "none"
@@ -104,13 +168,14 @@ def run_for_shared_portal(portal_cfg: dict, extra_keywords: tuple = ()) -> dict:
     """Scrape 1 portal dùng chung cho nhiều brand MỘT LẦN, rồi phân loại job theo
     brand. Trả về dict {company_name: [jobs]} — mỗi brand khai báo trong
     portal_cfg['brands'] luôn có key trong dict trả về (kể cả khi 0 job) để
-    main.py log đầy đủ."""
+    main.py log đầy đủ. Jobs đã qua Normalize + Validate từ run_for_company()
+    trước khi được phân loại brand ở đây."""
     name = portal_cfg["name"]
     url = portal_cfg["url"]
     brands = portal_cfg["brands"]
 
     jobs, method = run_for_company({"name": name, "url": url}, extra_keywords)
-    print(f"[{method.upper():10}] {name} (shared portal): {len(jobs)} job(s) thô, đang phân loại theo brand...")
+    print(f"[{method.upper():10}] {name} (shared portal): {len(jobs)} job(s) hợp lệ, đang phân loại theo brand...")
 
     result = {brand["company"]: [] for brand in brands}
     for job in jobs:

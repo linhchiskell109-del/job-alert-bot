@@ -49,6 +49,10 @@ companies:
   - name: "Zalo"
     url: "https://zalo.careers/jobs"
 
+  # Career site render JS (chưa xác định ATS/API public) -> đăng ký dùng
+  # scrapers/strict_html.py qua COMPANY_PARSER_OVERRIDES trong pipeline.py
+  # (lọc theo job ID trong URL thay vì heuristic từ khoá lỏng lẻo — tránh nhặt
+  # nhầm nút điều hướng, xem báo cáo gốc "Techcombank → buttons instead of jobs").
   - name: "Techcombank"
     url: "https://techcombankjobs.com"
 
@@ -66,11 +70,21 @@ companies:
   - name: "McKinsey & Company"
     url: "https://www.mckinsey.com/careers/search-jobs?countries=Vietnam"
 
+  # Xác minh lại 2026-07: "https://www.bain.com/careers" là trang marketing
+  # (chứa các link điều hướng như "Work with Us", "Find a Role" — chính là
+  # nguồn gốc lỗi scrape nhầm nav page). Job list THẬT nằm ở careers.bain.com
+  # (ATS Avature riêng, xác nhận qua meta tag "avature.portal.*") — pipeline
+  # tự nhận diện Avature qua ats_detector.py và dùng scrapers/avature.py.
   - name: "Bain & Company"
-    url: "https://www.bain.com/careers"
+    url: "https://careers.bain.com/jobs"
 
+  # Xác minh lại 2026-07: "https://careers.bcg.com" (bare domain) redirect về
+  # trang marketing nhiều nav link ("Explore", "Learn More"...). URL đúng để
+  # scrape là trang search-results (Phenom People, JS SPA) -> cần playwright +
+  # scrapers/strict_html.py (COMPANY_PARSER_OVERRIDES trong pipeline.py) để
+  # lọc theo job ID thay vì heuristic từ khoá lỏng lẻo.
   - name: "Boston Consulting Group (BCG)"
-    url: "https://careers.bcg.com"
+    url: "https://careers.bcg.com/global/en/search-results"
 
   - name: "Roland Berger"
     url: "https://www.rolandberger.com/en/Careers"
@@ -78,14 +92,28 @@ companies:
   - name: "KPMG Vietnam"
     url: "https://kpmg.com/vn/en/home/careers.html"
 
+  # Xác minh lại 2026-07: careers.ey.com CŨNG là SAP SuccessFactors ("This
+  # website is based on the SuccessFactors software provided by SAP" — xác
+  # nhận trực tiếp trên trang). ats_detector.py tự nhận diện + dùng
+  # scrapers/successfactors_csb.py (1-hop discovery), không cần đổi URL hay
+  # khai báo ats_hint thủ công — tự động fix luôn lỗi nhặt nhầm "What you can
+  # do here" trong báo cáo gốc.
   - name: "EY-Parthenon"
     url: "https://careers.ey.com"
 
   - name: "PwC Vietnam"
     url: "https://www.pwc.com/vn/en/careers.html"
 
+  # Xác minh lại 2026-07: đây là trang landing (chứa nav link "Show all jobs"
+  # — chính là nguồn gốc lỗi scrape nhầm nav page trong báo cáo gốc). Xác nhận
+  # đây là SAP SuccessFactors CSB (asset rmkcdn.successfactors.com) — HTML
+  # tĩnh, 780 job hiển thị lúc kiểm tra tại link "Show all jobs" đó.
+  # scrapers/successfactors_csb.py tự "1-hop discovery" tìm link listing thật
+  # bằng PATTERN URL (không dùng text "Show all jobs" để tạo Job) rồi scrape —
+  # nên GIỮ URL landing này (không hardcode thẳng URL listing có ID số, vì ID
+  # đó có thể đổi khi Deloitte relaunch site; landing URL ổn định hơn).
   - name: "Deloitte Vietnam"
-    url: "https://jobs.sea.deloitte.com/careers.deloitte.com"
+    url: "https://jobs.sea.deloitte.com/"
 
   # ---------------- FMCG ----------------
   - name: "Procter & Gamble"
@@ -100,6 +128,9 @@ companies:
   - name: "Nestlé"
     url: "https://www.nestle.com/jobs"
 
+  # Career site render JS (chưa xác định ATS/API public) -> đăng ký dùng
+  # scrapers/strict_html.py qua COMPANY_PARSER_OVERRIDES trong pipeline.py
+  # (lọc theo job ID trong URL — tránh nhặt nhầm "Career Areas" như báo cáo gốc).
   - name: "The Coca-Cola Company"
     url: "https://careers.coca-colacompany.com"
 
@@ -122,6 +153,10 @@ companies:
 # kỳ brand nào khác sẽ được xếp vào đây. Chỉ nên có ĐÚNG 1 brand default.
 # =========================================================================
 shared_portals:
+  # Career site render JS (Next.js SPA, chưa xác định ATS/API public) -> đăng
+  # ký dùng scrapers/strict_html.py qua COMPANY_PARSER_OVERRIDES trong
+  # pipeline.py (key "VNG Careers Portal" — khớp "name" portal, không phải
+  # brand) — tránh nhặt nhầm "Tìm công việc" như báo cáo gốc.
   - name: "VNG Careers Portal"
     url: "https://career.vng.com.vn/"
     brands:

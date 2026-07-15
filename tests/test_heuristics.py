@@ -1,4 +1,6 @@
-from heuristics import extract_jobs_from_html
+import re
+
+from heuristics import extract_jobs_by_strict_url_pattern, extract_jobs_from_html
 
 MOMO_LIKE_HTML = """
 <html><body>
@@ -83,3 +85,58 @@ def test_extra_keywords_widen_detection():
     jobs = extract_jobs_from_html(html, "https://example.com", "TestCo", extra_keywords=("co-hoi",))
     assert len(jobs) == 1
     assert jobs[0]["title"] == "Data Scientist"
+
+
+# ---- extract_jobs_by_strict_url_pattern (dùng cho scrapers/avature.py,
+# scrapers/successfactors_csb.py) — yêu cầu URL job có ID số thật, KHÔNG dựa
+# vào từ khoá path lỏng lẻo như extract_jobs_from_html() ----
+
+AVATURE_LIKE_HTML = """
+<html><body>
+<a href="/jobs">Search jobs</a>
+<a href="/jobs/RegistrationMethods">Register</a>
+<a href="/jobs/Login">Login</a>
+<div class="job-card">
+  <h3><a href="/jobs/FolderDetail/Sustainability-Consultant/102210">AI & Digital Products Consultant</a></h3>
+  <span>Lisbon</span>
+  <a href="/jobs/FolderDetail/Sustainability-Consultant/102210">Learn more</a>
+  <span>Share this job:</span>
+</div>
+<div class="job-card">
+  <h3><a href="/jobs/FolderDetail/Analyst-Americas-Revenue/105550">Analyst, Americas Revenue</a></h3>
+  <span>Boston</span>
+  <a href="/jobs/FolderDetail/Analyst-Americas-Revenue/105550">Learn more</a>
+</div>
+<a href="https://www.bain.com/about/terms/">Terms & conditions</a>
+<a href="https://www.bain.com/about/privacy/">Privacy policy</a>
+</body></html>
+"""
+
+AVATURE_JOB_URL_PATTERN = re.compile(r"/jobs/FolderDetail/[^/]+/\d+/?(?:[?#].*)?$", re.IGNORECASE)
+
+
+def test_strict_pattern_only_extracts_real_jobs_not_nav_links():
+    jobs = extract_jobs_by_strict_url_pattern(
+        AVATURE_LIKE_HTML, "https://careers.bain.com/jobs", "Bain & Company", AVATURE_JOB_URL_PATTERN,
+    )
+    titles = {j["title"] for j in jobs}
+    assert titles == {"AI & Digital Products Consultant", "Analyst, Americas Revenue"}
+    # nav links (Search jobs/Register/Login/Terms/Privacy) không có ID số -> bị loại
+    assert len(jobs) == 2
+
+
+def test_strict_pattern_dedupes_title_and_learn_more_duplicate_anchors():
+    jobs = extract_jobs_by_strict_url_pattern(
+        AVATURE_LIKE_HTML, "https://careers.bain.com/jobs", "Bain & Company", AVATURE_JOB_URL_PATTERN,
+    )
+    urls = [j["url"] for j in jobs]
+    assert len(urls) == len(set(urls))  # mỗi job (title-link + learn-more-link trùng href) chỉ xuất hiện 1 lần
+
+
+def test_strict_pattern_captures_raw_location_context():
+    jobs = extract_jobs_by_strict_url_pattern(
+        AVATURE_LIKE_HTML, "https://careers.bain.com/jobs", "Bain & Company", AVATURE_JOB_URL_PATTERN,
+    )
+    by_title = {j["title"]: j for j in jobs}
+    assert "Lisbon" in by_title["AI & Digital Products Consultant"]["location"]
+    assert "Boston" in by_title["Analyst, Americas Revenue"]["location"]

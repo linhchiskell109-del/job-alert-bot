@@ -67,10 +67,24 @@ def test_detects_oracle_recruiting_from_domain():
     assert match.ats == "oracle_recruiting"
 
 
-def test_successfactors_and_oracle_have_no_adapter():
+def test_successfactors_now_has_adapter_oracle_still_does_not():
     from ats_detector import ADAPTER_SUPPORTED_ATS, DETECTED_ONLY_ATS
-    assert "successfactors" in DETECTED_ONLY_ATS
     assert "oracle_recruiting" in DETECTED_ONLY_ATS
-    assert "successfactors" not in ADAPTER_SUPPORTED_ATS
     assert "oracle_recruiting" not in ADAPTER_SUPPORTED_ATS
+    assert "successfactors" in ADAPTER_SUPPORTED_ATS
+    assert "avature" in ADAPTER_SUPPORTED_ATS
     assert "smartrecruiters" in ADAPTER_SUPPORTED_ATS
+
+
+def test_detects_avature_from_portal_meta_tag():
+    text = '<meta name="avature.portal.id" content="24"><meta name="avature.portal.name" content="ETR: Careers">'
+    match = _match_in(text, source_url="https://careers.bain.com/jobs")
+    assert match.ats == "avature"
+    assert match.params["base_url"] == "https://careers.bain.com/jobs"
+
+
+def test_detects_successfactors_carries_base_url():
+    text = 'asset from <script src="https://rmkcdn.successfactors.com/foo.js"></script>'
+    match = _match_in(text, source_url="https://jobs.sea.deloitte.com/")
+    assert match.ats == "successfactors"
+    assert match.params["base_url"] == "https://jobs.sea.deloitte.com/"
