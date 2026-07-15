@@ -25,6 +25,8 @@ from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup
 
+from url_utils import normalize_url
+
 DEFAULT_JOB_PATH_KEYWORDS = (
     "job", "jobs", "career", "careers", "position", "positions",
     "opening", "openings", "vacancy", "vacancies", "role", "roles",
@@ -167,7 +169,7 @@ def extract_jobs_from_html(html: str, base_url: str, company: str, extra_keyword
         if not _looks_like_job_link(href, extra_keywords):
             continue
 
-        abs_url = urljoin(base_url, href)
+        abs_url = normalize_url(urljoin(base_url, href))
         if abs_url in seen_urls:
             continue
 

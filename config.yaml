@@ -1,16 +1,15 @@
 # =========================================================================
-# CONFIG cho Job Alert Bot — v2 (auto-detect, không cần khai báo ATS/selector)
+# CONFIG cho Job Alert Bot — v2.1
 # =========================================================================
-# Mỗi công ty CHỈ CẦN "name" + "url" (link tới trang career/tuyển dụng).
-# Bot sẽ tự động:
-#   - Phát hiện công ty có dùng Workday/Greenhouse/Lever không (qua ats_detector.py)
-#   - Nếu không, tự parse HTML để tìm job (heuristic, không cần CSS selector)
+# Mỗi công ty CHỈ CẦN "name" + "url" (link career/tuyển dụng đã được verify thủ
+# công — xem "companies" bên dưới). Bot tự động:
+#   - Kiểm tra URL còn truy cập được không (không tự đoán URL khác nếu chết)
+#   - Phát hiện ATS: Workday / Greenhouse / Lever / SmartRecruiters (có adapter
+#     public API) hoặc SAP SuccessFactors / Oracle Recruiting (chỉ nhận diện để
+#     route đúng, không có API public tin cậy nên dùng HTML/Playwright)
+#   - Nếu không phải ATS đã biết -> tự parse HTML tìm job (heuristic, không cần
+#     CSS selector)
 #   - Nếu HTML tĩnh không đủ (trang cần JS) -> tự fallback sang trình duyệt thật
-#
-# TODO: một vài URL dưới đây là best-effort tại thời điểm viết config, có thể đã
-# đổi domain/path. Nếu log báo "[NONE] <company>: 0 job(s)" liên tục, việc đầu
-# tiên cần làm là mở URL đó bằng trình duyệt và kiểm tra link có còn đúng không
-# (KHÔNG cần inspect CSS selector — chỉ cần đúng URL).
 #
 # Escape hatch (KHÔNG bắt buộc): nếu bạn đã biết chắc 1 công ty dùng ATS nào đó,
 # có thể khai báo thẳng để bỏ qua bước auto-detect, ví dụ:
@@ -23,72 +22,88 @@
 companies:
   # ---------------- Vietnam tech / fintech ----------------
   - name: "MoMo (M_Service)"
-    url: "https://momo.vn/tuyen-dung"
-
-  - name: "VNG"
-    url: "https://vng.careers/jobs"
-
-  - name: "Shopee"
-    url: "https://careers.shopee.vn/"
+    url: "https://momo.careers/jobs-opening"
 
   - name: "Grab"
     url: "https://grab.careers"
 
-  - name: "Techcombank"
-    url: "https://tuyendung.techcombank.com.vn/"
+  - name: "Shopee"
+    url: "https://careers.shopee.sg"
 
   - name: "Zalo"
     url: "https://zalo.careers/"
 
-  - name: "Zalopay"
-    url: "https://zalopay.careers/"
+  - name: "Techcombank"
+    url: "https://techcombankjobs.com"
 
   - name: "Monee"
-    url: "https://monee.vn/careers"   # TODO verify URL đúng
+    url: "https://careers.monee.com/careers"
 
   # ---------------- Consulting ----------------
   - name: "McKinsey & Company"
-    url: "https://www.mckinsey.com/careers/search-jobs"
+    url: "https://www.mckinsey.com/careers"
 
   - name: "Bain & Company"
-    url: "https://www.bain.com/careers/find-a-job/"
+    url: "https://www.bain.com/careers"
 
   - name: "Boston Consulting Group (BCG)"
-    url: "https://www.bcg.com/careers/job-search"
+    url: "https://careers.bcg.com"
 
   - name: "Roland Berger"
-    url: "https://www.rolandberger.com/en/Careers.html"
+    url: "https://www.rolandberger.com/en/Careers"
 
   - name: "KPMG Vietnam"
     url: "https://kpmg.com/vn/en/home/careers.html"
 
   - name: "EY-Parthenon"
-    url: "https://www.ey.com/en_vn/careers"
+    url: "https://careers.ey.com"
 
-  - name: "PwC"
+  - name: "PwC Vietnam"
     url: "https://www.pwc.com/vn/en/careers.html"
 
-  - name: "Deloitte"
-    url: "https://www2.deloitte.com/vn/en/careers.html"
+  - name: "Deloitte Vietnam"
+    url: "https://jobs.sea.deloitte.com/careers.deloitte.com"
 
   # ---------------- FMCG ----------------
   - name: "Procter & Gamble"
-    url: "https://www.pgcareers.com/"
+    url: "https://www.pgcareers.com"
 
   - name: "Masan Consumer Holdings"
-    url: "https://www.masangroup.com/en/careers"
+    url: "https://careers.masanconsumer.com/?locale=vi_VN"
 
   - name: "Unilever"
-    url: "https://www.unilever.com/careers/search-and-apply/"
+    url: "https://careers.unilever.com"
 
   - name: "Nestlé"
     url: "https://www.nestle.com/jobs"
 
   - name: "The Coca-Cola Company"
-    url: "https://www.coca-colacompany.com/careers"
+    url: "https://careers.coca-colacompany.com"
 
   - name: "Vinamilk"
-    url: "https://tuyendung.vinamilk.com.vn/"
+    url: "https://www.vinamilk.com.vn/recruitment/career-opportunities"
+
+# =========================================================================
+# SHARED PORTAL: 1 trang career dùng chung cho nhiều brand -> scrape MỘT LẦN,
+# sau đó phân loại job theo brand bằng từ khoá (title/department/description).
+# VNG và ZaloPay cùng đăng tuyển trên career.vng.com.vn -> gộp thành 1 portal.
+# Zalo có trang career riêng (zalo.careers, đã khai báo ở "companies" bên trên)
+# nên KHÔNG nằm trong portal này.
+#
+# Brand có "default: true" là bucket mặc định — job không khớp từ khoá của bất
+# kỳ brand nào khác sẽ được xếp vào đây. Chỉ nên có ĐÚNG 1 brand default.
+# =========================================================================
+shared_portals:
+  - name: "VNG Careers Portal"
+    url: "https://career.vng.com.vn/"
+    brands:
+      - company: "ZaloPay"
+        match_keywords:
+          - "zalopay"
+          - "zalo pay"
+          - "ví zalopay"
+      - company: "VNG"
+        default: true
 
 # =========================================================================
 # Từ khoá URL bổ sung (tuỳ chọn) — nếu 1 site dùng path pattern lạ (không nằm
