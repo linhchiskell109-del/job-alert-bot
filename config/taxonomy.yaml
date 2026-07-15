@@ -44,6 +44,16 @@ industries:
       - consulting
       - strategy
       - business
+      - business_strategy
+      - business_planning
+      - transformation
+      - operations
+      - operations_excellence
+      - pmo
+      - program
+      - project
+      - analytics
+      - insights
 
   consumer_tech:
     display_name: "Consumer Tech / Platform"
@@ -63,6 +73,17 @@ industries:
       - operations
       - partnerships
       - business
+      - merchant
+      - marketplace
+      - customer_success
+      - analytics
+      - insights
+      - pmo
+      - program
+      - project
+      - transformation
+      - operations_excellence
+      - business_excellence
 
   banking_fintech:
     display_name: "Banking / Fintech"
@@ -80,6 +101,16 @@ industries:
       - partnerships
       - business
       - finance
+      - analytics
+      - insights
+      - pmo
+      - program
+      - project
+      - transformation
+      - operations_excellence
+      - business_excellence
+      - business_strategy
+      - business_planning
 
   fmcg:
     display_name: "FMCG"
@@ -97,6 +128,11 @@ industries:
       - revenue_growth
       - consumer_insights
       - innovation
+      - analytics
+      - insights
+      - business_planning
+      - transformation
+      - operations_excellence
 
   general:
     display_name: "General / Unclassified"
@@ -110,6 +146,23 @@ industries:
       - marketing
       - operations
       - consulting
+      - business_strategy
+      - business_planning
+      - merchant
+      - partnerships
+      - pmo
+      - program
+      - project
+      - transformation
+      - operations_excellence
+      - business_excellence
+      - analytics
+      - insights
+      - consumer_insights
+      - category
+      - trade_marketing
+      - marketplace
+      - customer_success
 
 functions:
   product:
@@ -169,15 +222,123 @@ functions:
       - "strategy consulting"
       - "business consulting"
       - "management consulting"
-      - "transformation"
-      - "transformation office"
-      - "business transformation"
       - "corporate strategy"
       - "internal consulting"
       - "venture"
       - "venture builder"
       - "venture studio"
       - "innovation"
+
+  business_strategy:
+    display_name: "Business Strategy"
+    synonyms:
+      - "business strategy"
+      - "strategy and business development"
+      - "strategy & business development"
+      - "strategic planning"
+      - "strategy planning"
+
+  business_planning:
+    display_name: "Business Planning"
+    synonyms:
+      - "business planning"
+      - "commercial planning"
+      - "planning analyst"
+      - "planning manager"
+      - "sales and operations planning"
+      - "s&op"
+
+  transformation:
+    display_name: "Transformation"
+    synonyms:
+      - "transformation"
+      - "transformation office"
+      - "business transformation"
+      - "digital transformation"
+      - "change management"
+      - "organizational transformation"
+
+  merchant:
+    display_name: "Merchant"
+    synonyms:
+      - "merchant"
+      - "merchant strategy"
+      - "merchant growth"
+      - "merchant operations"
+      - "merchant success"
+      - "merchant partnerships"
+      - "merchant management"
+
+  pmo:
+    display_name: "PMO"
+    synonyms:
+      - "pmo"
+      - "project management office"
+      - "program management office"
+
+  program:
+    display_name: "Program"
+    synonyms:
+      - "program manager"
+      - "program management"
+      - "program lead"
+      - "program associate"
+
+  project:
+    display_name: "Project"
+    synonyms:
+      - "project manager"
+      - "project management"
+      - "project lead"
+      - "project coordinator"
+
+  operations_excellence:
+    display_name: "Operations Excellence"
+    synonyms:
+      - "operations excellence"
+      - "operational excellence"
+      - "process excellence"
+      - "continuous improvement"
+
+  business_excellence:
+    display_name: "Business Excellence"
+    synonyms:
+      - "business excellence"
+      - "commercial excellence"
+      - "performance excellence"
+
+  analytics:
+    display_name: "Analytics"
+    synonyms:
+      - "analytics"
+      - "business analytics"
+      - "data analytics"
+      - "commercial analytics"
+      - "performance analytics"
+
+  insights:
+    display_name: "Insights"
+    synonyms:
+      - "insights"
+      - "business insights"
+      - "customer insights"
+      - "data insights"
+
+  marketplace:
+    display_name: "Marketplace"
+    synonyms:
+      - "marketplace"
+      - "marketplace management"
+      - "marketplace operations"
+      - "marketplace strategy"
+
+  customer_success:
+    display_name: "Customer Success"
+    synonyms:
+      - "customer success"
+      - "client success"
+      - "customer success manager"
+      - "customer experience"
 
   business:
     display_name: "Business / Analyst"
@@ -201,6 +362,14 @@ functions:
       - "implementation associate"
       - "consultant"
       - "analyst"
+      - "senior associate"
+      - "senior consultant"
+      - "corporate development"
+      - "transaction services"
+      - "m&a"
+      - "mergers and acquisitions"
+      - "digital"
+      - "technology strategy"
 
   marketing:
     display_name: "Marketing"

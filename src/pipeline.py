@@ -16,13 +16,20 @@
    LUÔN được thử trước khi dùng trình duyệt thật, vì rẻ và nhanh hơn nhiều.
 4. Nếu html_scraper trả về 0 job -> fallback playwright_scraper (render JS rồi áp
    dụng CÙNG heuristic).
-5. Normalize -> Validate: MỌI job từ bất kỳ nguồn nào ở trên (ATS/company
-   parser/html/playwright) đều đi qua normalize_job() (tách title/location/
-   employment_type từ text thô) rồi validate_job() (loại nav/menu page, job
-   thiếu field bắt buộc) TRƯỚC KHI trả về cho main.py đưa vào matching engine —
-   xem normalize.py + validation.py. Đây là lớp bảo vệ ĐỘC LẬP với parser,
-   nên dù 1 parser nào đó (kể cả tương lai) lỡ nhặt nhầm nav link, job đó vẫn
-   bị chặn lại ở đây, không bao giờ tới được matching engine.
+5. Normalize -> Validate -> Location prefilter: MỌI job từ bất kỳ nguồn nào ở
+   trên (ATS/company parser/html/playwright) đều đi qua:
+     a. normalize_job() — tách title/location/employment_type từ text thô,
+        KHÔNG BAO GIỜ loại job chỉ vì thiếu location/country (gán "Unknown").
+     b. validate_job() — loại nav/menu page, job thiếu field bắt buộc
+        (title/url).
+     c. _location_allowed() — loại SỚM (ngay trong bước scraping, TRƯỚC khi
+        vào matching engine) job có location RÕ RÀNG không thuộc
+        `allowed_locations` (vd "Singapore", "Boston", "Lisbon"). Job có
+        location "Unknown"/trống KHÔNG bị loại ở đây (không đủ căn cứ để nói
+        "rõ ràng ở nước khác") — nhường lại cho matching engine cân nhắc.
+   Đây là lớp bảo vệ ĐỘC LẬP với parser, nên dù 1 parser nào đó (kể cả tương
+   lai) lỡ nhặt nhầm nav link hay job ở nước khác, vẫn bị chặn lại ở đây,
+   không bao giờ tới được matching engine.
 
 Không có bước nào trong pipeline này yêu cầu người dùng khai báo CSS selector hay
 loại ATS thủ công, và không có bước nào tự tạo ra URL/domain không có thật.
@@ -31,6 +38,8 @@ Ngoài ra, module này hỗ trợ "shared portal" — 1 trang career dùng chung
 brand/công ty (vd VNG + ZaloPay cùng đăng trên career.vng.com.vn): scrape MỘT LẦN
 rồi phân loại job theo brand bằng từ khoá, thay vì crawl cùng 1 trang nhiều lần.
 """
+import re
+
 from ats_detector import DETECTED_ONLY_ATS, detect
 from normalize import normalize_job
 from scrapers import (
@@ -69,28 +78,64 @@ COMPANY_PARSER_OVERRIDES = {
 }
 
 
-def _normalize_and_validate(jobs: list, company: str) -> list:
-    """Normalize -> Validate — bước cuối cùng trước khi job rời khỏi pipeline
-    scraping, áp dụng ĐỒNG NHẤT cho MỌI nguồn (ATS/company parser/html/
-    playwright). Job không hợp lệ (nav/menu page, thiếu field bắt buộc) bị
-    loại và log rõ lý do để dễ debug scraper."""
-    valid_jobs = []
+def _contains_word(haystack_norm: str, phrase: str) -> bool:
+    phrase_norm = normalize(phrase)
+    if not phrase_norm:
+        return False
+    pattern = r"(?<![a-z0-9])" + re.escape(phrase_norm) + r"(?![a-z0-9])"
+    return re.search(pattern, haystack_norm) is not None
+
+
+def _location_allowed(job: dict, allowed_locations: tuple) -> bool:
+    """EARLY location filter — chạy trong lúc scraping, TRƯỚC matching engine.
+    Job "Unknown"/trống location (không đủ căn cứ để nói "rõ ràng ở nước
+    khác") LUÔN được giữ lại — chỉ loại khi location/title nói RÕ 1 nơi không
+    thuộc allowed_locations. `allowed_locations` rỗng -> không lọc gì cả."""
+    if not allowed_locations:
+        return True
+
+    location = str(job.get("location", "") or "").strip()
+    country = str(job.get("country", "") or "").strip()
+    if not location or normalize(location) == normalize("Unknown"):
+        if not country:
+            return True  # không có thông tin -> không loại
+
+    haystack = normalize(f"{job.get('title', '')} {location} {country}")
+    return any(_contains_word(haystack, loc) for loc in allowed_locations)
+
+
+def _postprocess(jobs: list, company: str, allowed_locations: tuple = ()) -> list:
+    """Normalize -> Validate -> Location prefilter — bước cuối cùng trước khi
+    job rời khỏi pipeline scraping, áp dụng ĐỒNG NHẤT cho MỌI nguồn (ATS/
+    company parser/html/playwright). Job bị loại ở bước nào cũng được log rõ
+    lý do để dễ debug scraper."""
+    result = []
     for job in jobs:
         normalized = normalize_job(job)
-        result = validate_job(normalized)
-        if result.is_valid:
-            valid_jobs.append(normalized)
-        else:
+
+        validation = validate_job(normalized)
+        if not validation.is_valid:
             title_preview = (job.get("title") or "")[:60]
-            print(f"  [DISCARD] {company} — \"{title_preview}\" -> {result.reason}")
-    return valid_jobs
+            print(f"  [DISCARD] {company} — \"{title_preview}\" -> {validation.reason}")
+            continue
+
+        if not _location_allowed(normalized, allowed_locations):
+            title_preview = normalized.get("title", "")[:60]
+            loc_preview = normalized.get("location", "")
+            print(f"  [DISCARD] {company} — \"{title_preview}\" -> location_not_allowed ({loc_preview})")
+            continue
+
+        result.append(normalized)
+
+    return result
 
 
-def run_for_company(company_cfg: dict, extra_keywords: tuple = ()) -> tuple[list[dict], str]:
+def run_for_company(company_cfg: dict, extra_keywords: tuple = (),
+                     allowed_locations: tuple = ()) -> tuple[list[dict], str]:
     """Trả về (jobs, method_used). method_used dùng để log — giúp biết công ty nào
     đang phải fallback Playwright (tốn tài nguyên hơn), hoặc URL nào bị chết,
     không phải để người dùng cấu hình lại gì cả. Jobs trả về LUÔN đã qua
-    Normalize + Validate (xem _normalize_and_validate)."""
+    Normalize + Validate + Location prefilter (xem _postprocess)."""
     name = company_cfg["name"]
     url = company_cfg["url"]
 
@@ -115,7 +160,7 @@ def run_for_company(company_cfg: dict, extra_keywords: tuple = ()) -> tuple[list
         try:
             jobs = ATS_ADAPTERS[ats](name, params)
             if jobs:
-                return _normalize_and_validate(jobs, name), ats
+                return _postprocess(jobs, name, allowed_locations), ats
         except Exception as e:
             print(f"[WARN] {name}: adapter '{ats}' lỗi ({e}) -> fallback parser khác")
 
@@ -123,7 +168,7 @@ def run_for_company(company_cfg: dict, extra_keywords: tuple = ()) -> tuple[list
         try:
             jobs = COMPANY_PARSER_OVERRIDES[name](url, name, extra_keywords)
             if jobs:
-                return _normalize_and_validate(jobs, name), "company_parser"
+                return _postprocess(jobs, name, allowed_locations), "company_parser"
         except Exception as e:
             print(f"[WARN] {name}: company-specific parser lỗi ({e}) -> fallback HTML scraper")
 
@@ -134,11 +179,11 @@ def run_for_company(company_cfg: dict, extra_keywords: tuple = ()) -> tuple[list
         jobs = []
 
     if jobs:
-        return _normalize_and_validate(jobs, name), "html"
+        return _postprocess(jobs, name, allowed_locations), "html"
 
     try:
         jobs = playwright_scraper.fetch(url, name, extra_keywords)
-        return _normalize_and_validate(jobs, name), ("playwright" if jobs else "none")
+        return _postprocess(jobs, name, allowed_locations), ("playwright" if jobs else "none")
     except Exception as e:
         print(f"[ERROR] {name}: playwright fallback cũng lỗi ({e})")
         return [], "none"
@@ -164,17 +209,18 @@ def classify_job_brand(job: dict, brands: list) -> str:
     return brands[0]["company"] if brands else job.get("company", "")
 
 
-def run_for_shared_portal(portal_cfg: dict, extra_keywords: tuple = ()) -> dict:
+def run_for_shared_portal(portal_cfg: dict, extra_keywords: tuple = (),
+                           allowed_locations: tuple = ()) -> dict:
     """Scrape 1 portal dùng chung cho nhiều brand MỘT LẦN, rồi phân loại job theo
     brand. Trả về dict {company_name: [jobs]} — mỗi brand khai báo trong
     portal_cfg['brands'] luôn có key trong dict trả về (kể cả khi 0 job) để
-    main.py log đầy đủ. Jobs đã qua Normalize + Validate từ run_for_company()
-    trước khi được phân loại brand ở đây."""
+    main.py log đầy đủ. Jobs đã qua Normalize + Validate + Location prefilter
+    từ run_for_company() trước khi được phân loại brand ở đây."""
     name = portal_cfg["name"]
     url = portal_cfg["url"]
     brands = portal_cfg["brands"]
 
-    jobs, method = run_for_company({"name": name, "url": url}, extra_keywords)
+    jobs, method = run_for_company({"name": name, "url": url}, extra_keywords, allowed_locations)
     print(f"[{method.upper():10}] {name} (shared portal): {len(jobs)} job(s) hợp lệ, đang phân loại theo brand...")
 
     result = {brand["company"]: [] for brand in brands}

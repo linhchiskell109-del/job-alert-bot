@@ -548,3 +548,78 @@ validation/normalize/strict-pattern extraction.
   phần "department" phía sau tạm thời vẫn nằm trong field `location`. Có thể
   cải thiện thêm bằng cách thêm danh sách department/practice-area biết trước
   vào `config/normalize.yaml` nếu cần độ chính xác cao hơn.
+
+---
+
+# v6 — Parser robustness, broader taxonomy, consulting ladder, early location filter
+
+## 1. Parser robustness — không loại job chỉ vì thiếu location/country
+
+`src/normalize.py::normalize_job()` giờ gán `location = "Unknown"` nếu sau tất
+cả các bước tách chuỗi vẫn không có location LẪN không có country — thay vì để
+trống. Vì `validation.py` chỉ yêu cầu 1 trong 2 field này CÓ GIÁ TRỊ, job có
+title + url hợp lệ sẽ KHÔNG BAO GIỜ bị loại chỉ vì thiếu location nữa.
+
+## 2. Mở rộng function taxonomy (`config/taxonomy.yaml`)
+
+Thêm 13 function mới, tất cả trong file YAML (không đụng code):
+`business_strategy`, `business_planning`, `transformation` (tách riêng khỏi
+`strategy`), `merchant`, `pmo`, `program`, `project`, `operations_excellence`,
+`business_excellence`, `analytics`, `insights`, `marketplace`,
+`customer_success`. Mỗi industry (`consulting`/`consumer_tech`/
+`banking_fintech`/`fmcg`/`general`) được cập nhật `relevant_functions` cho phù
+hợp (vd `merchant`/`marketplace`/`customer_success` chỉ "đúng bài" ở
+`consumer_tech`, `business_planning`/`consumer_insights` ở `fmcg`). Vẫn dùng
+CHUNG thuật toán fuzzy/token-overlap từ v3 (`_match_confidence`) — không có
+khái niệm "khớp từ khoá chính xác" nào mới, tự động suy luận qua camel-split +
+token overlap + fuzzy single-word như trước.
+
+## 3. Consulting career ladder (`functions.consulting.synonyms`)
+
+Thêm các cách gọi ladder tư vấn: `senior associate`, `senior consultant`,
+`corporate development`, `transaction services`, `m&a`, `mergers and
+acquisitions`, `digital`, `technology strategy` — tất cả được coi là function
+`consulting`, full điểm `industry_alignment` khi công ty thuộc industry
+`consulting` (McKinsey/Bain/BCG/Deloitte/EY/KPMG/Roland Berger đã có override
+industry=consulting từ v3). Level vẫn được chấm ĐỘC LẬP như trước — "Senior
+Associate"/"Senior Consultant" khớp đúng function `consulting` nhưng level
+`mid_level` (không eligible) vẫn bị loại vì "experience" nếu người dùng chỉ
+muốn entry-level, đúng tinh thần "high score NẾU level cũng khớp".
+
+## 4. Early location filtering (`pipeline.py::_location_allowed`)
+
+**Trước:** location chỉ được chấm điểm (soft) BÊN TRONG matching engine.
+**Giờ:** thêm 1 bước filter CỨNG ngay trong `pipeline.run_for_company()`,
+chạy NGAY SAU Normalize + Validate, TRƯỚC KHI job vào matching engine — job có
+location RÕ RÀNG không thuộc `config.yaml -> locations` (giờ đã thêm "remote
+vietnam", "hybrid vietnam", "saigon", "sea") bị loại thẳng, log
+`[DISCARD] ... -> location_not_allowed (<location>)`.
+
+Job có location `"Unknown"`/trống KHÔNG bị loại ở bước này (không đủ căn cứ để
+nói "rõ ràng ở nước khác", nhất quán với mục 1 — parser robustness) — nhường
+việc cân nhắc lại cho matching engine (vẫn dùng `locations` để chấm điểm soft
+như trước nếu `matching_engine: legacy`, hoặc bỏ qua location trong scoring
+semantic vì đã lọc sớm rồi).
+
+`allowed_locations` được truyền từ `main.py` (đọc từ `config["locations"]`)
+xuyên suốt `process_company` -> `run_for_company` -> `_postprocess`, và tương
+tự cho shared portal.
+
+## 5. File thay đổi
+
+| File | Thay đổi |
+|---|---|
+| `src/normalize.py` | Gán `location = "Unknown"` thay vì để trống khi không tách được |
+| `config/taxonomy.yaml` | Thêm 13 function mới + mở rộng `relevant_functions` mỗi industry + mở rộng ladder tư vấn trong `consulting.synonyms` |
+| `config.yaml` | Thêm "remote vietnam"/"hybrid vietnam"/"saigon"/"sea" vào `locations` |
+| `src/pipeline.py` | Thêm `_location_allowed()` + `_postprocess()` (gộp Normalize→Validate→Location), tham số `allowed_locations` xuyên suốt |
+| `src/main.py` | Truyền `config["locations"]` làm `allowed_locations` vào `process_company`/`process_shared_portal` |
+| `tests/test_location_filter.py` | **Mới** — 5 test cho early location filter |
+| `tests/test_matching_engine.py` | Thêm 8 test cho taxonomy mở rộng + consulting ladder |
+
+**Không đổi**: kiến trúc matching engine (`matching/engine.py` — thuật toán
+fuzzy matching không đổi, chỉ đổi DỮ LIỆU taxonomy), `filters.py`, ATS
+adapters, GitHub Actions workflow.
+
+**Tổng: 87/87 test pass** (`pytest tests/ -v`), gồm 13 test mới cho 4 yêu cầu
+lần này.

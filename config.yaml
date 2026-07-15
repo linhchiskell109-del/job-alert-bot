@@ -266,18 +266,31 @@ levels:
   - apm
 
 # =========================================================================
-# LOCATION (title/location phải chứa ÍT NHẤT 1 từ trong danh sách này)
+# LOCATION — dùng ở 2 nơi:
+#   1. EARLY FILTER (bắt buộc, trong pipeline.py, chạy NGAY SAU Normalize +
+#      Validate, TRƯỚC KHI vào matching engine) — loại thẳng job có location
+#      RÕ RÀNG không thuộc danh sách này (vd "Singapore", "London", "Boston").
+#      Job có location "Unknown"/trống KHÔNG bị loại ở bước này (không đủ căn
+#      cứ để nói "rõ ràng ở nước khác") — để matching engine tự cân nhắc.
+#   2. Soft scoring bên trong matching engine (location_match trong
+#      scoring.yaml) khi matching_engine=legacy hoặc muốn chấm điểm thêm.
+# Để trống (locations: []) nếu không muốn lọc theo location ở cả 2 nơi.
 # =========================================================================
 locations:
   - "vn"
   - "vietnam"
   - "viet nam"
+  - "remote vietnam"
+  - "hybrid vietnam"
   - "hn"
   - "ha noi"
   - "hanoi"
   - "hcmc"
   - "hcm"
   - "ho chi minh"
+  - "saigon"
+  - "sai gon"
+  - "sea"
 
 # match_mode: chỉ dùng khi matching_engine = "legacy" bên dưới.
 #             "AND" -> job phải khớp keyword AND level AND location

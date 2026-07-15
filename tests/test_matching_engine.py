@@ -102,3 +102,59 @@ def test_weak_fuzzy_match_does_not_hard_reject_as_excluded_function():
     result = _evaluate("Grab", "Platform Growth Champion")
     assert result.accepted
     assert result.function == "growth"
+
+
+def test_consulting_ladder_transaction_services_recognized():
+    result = _evaluate("Bain & Company", "Transaction Services Analyst")
+    assert result.accepted
+    assert result.function == "consulting"
+    assert result.industry == "consulting"
+
+
+def test_consulting_ladder_corporate_development_recognized():
+    result = _evaluate("Boston Consulting Group (BCG)", "Corporate Development Associate")
+    assert result.accepted
+    assert result.function == "consulting"
+
+
+def test_consulting_ladder_senior_associate_recognized_but_level_gated():
+    # "Senior Associate" khớp function consulting NHƯNG level mid_level không
+    # eligible -> vẫn bị loại vì kinh nghiệm, đúng yêu cầu "high score NẾU
+    # level cũng khớp" (level không khớp thì vẫn loại).
+    result = _evaluate("McKinsey & Company", "Senior Associate")
+    assert result.function == "consulting"
+    assert result.level == "mid_level"
+    assert not result.accepted
+    assert result.reason == "experience"
+
+
+def test_merchant_function_recognized_at_consumer_tech():
+    result = _evaluate("Grab", "Merchant Operations Lead")
+    assert result.accepted
+    assert result.function == "merchant"
+
+
+def test_marketplace_function_recognized():
+    result = _evaluate("Grab", "Marketplace Strategy Associate")
+    assert result.accepted
+    assert result.function == "marketplace"
+
+
+def test_customer_success_function_recognized():
+    result = _evaluate("MoMo (M_Service)", "Customer Success Executive")
+    assert result.accepted
+    assert result.function == "customer_success"
+
+
+def test_consumer_insights_and_business_planning_recognized_at_fmcg():
+    r1 = _evaluate("Unilever", "Consumer Insights Analyst")
+    assert r1.accepted and r1.function == "consumer_insights"
+    r2 = _evaluate("Unilever", "Business Planning Executive")
+    assert r2.accepted and r2.function == "business_planning"
+
+
+def test_business_excellence_and_pmo_functions_recognized():
+    r1 = _evaluate("Techcombank", "Business Excellence Associate")
+    assert r1.accepted and r1.function == "business_excellence"
+    r2 = _evaluate("Grab", "PMO Analyst")
+    assert r2.accepted

@@ -156,6 +156,13 @@ def normalize_job(job: dict, config: NormalizeConfig = None) -> dict:
     if location:
         location = _canonicalize_location_text(location, flat_locations)
 
+    # KHÔNG BAO GIỜ loại job chỉ vì thiếu location/country — nếu sau tất cả các
+    # bước trên vẫn không có location LẪN không có country, gán "Unknown" thay
+    # vì để trống (validation layer chỉ yêu cầu 1 trong 2 field này CÓ GIÁ TRỊ,
+    # "Unknown" tính là có giá trị). title + url hợp lệ là đủ để giữ job lại.
+    if not location and not str(job.get("country", "") or "").strip():
+        location = "Unknown"
+
     result["title"] = title
     result["location"] = location
     result["employment_type"] = employment_type

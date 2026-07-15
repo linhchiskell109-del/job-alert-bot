@@ -69,20 +69,20 @@ def _build_engine_ctx() -> dict:
     }
 
 
-def process_company(company_cfg: dict, extra_keywords: tuple) -> dict:
+def process_company(company_cfg: dict, extra_keywords: tuple, allowed_locations: tuple) -> dict:
     name = company_cfg["name"]
     try:
-        jobs, method = run_for_company(company_cfg, extra_keywords)
+        jobs, method = run_for_company(company_cfg, extra_keywords, allowed_locations)
     except Exception as e:
         print(f"[ERROR] {name}: {e}")
         jobs, method = [], "error"
     return {"kind": "company", "name": name, "jobs": jobs, "method": method, "company_cfg": company_cfg}
 
 
-def process_shared_portal(portal_cfg: dict, extra_keywords: tuple) -> dict:
+def process_shared_portal(portal_cfg: dict, extra_keywords: tuple, allowed_locations: tuple) -> dict:
     name = portal_cfg["name"]
     try:
-        jobs_by_brand = run_for_shared_portal(portal_cfg, extra_keywords)
+        jobs_by_brand = run_for_shared_portal(portal_cfg, extra_keywords, allowed_locations)
     except Exception as e:
         print(f"[ERROR] {name}: {e}")
         jobs_by_brand = {b["company"]: [] for b in portal_cfg.get("brands", [])}
@@ -142,6 +142,7 @@ def _process_jobs(jobs: list, company_cfg: dict, config: dict, state: dict,
 def main():
     config = load_config()
     extra_keywords = tuple(config.get("extra_job_url_keywords", []))
+    allowed_locations = tuple(config.get("locations", []))
     companies = config["companies"]
     shared_portals = config.get("shared_portals", [])
     engine_ctx = _build_engine_ctx()
@@ -161,8 +162,8 @@ def main():
     method_counts = {}
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = [executor.submit(process_company, c, extra_keywords) for c in companies]
-        futures += [executor.submit(process_shared_portal, p, extra_keywords) for p in shared_portals]
+        futures = [executor.submit(process_company, c, extra_keywords, allowed_locations) for c in companies]
+        futures += [executor.submit(process_shared_portal, p, extra_keywords, allowed_locations) for p in shared_portals]
 
         for future in as_completed(futures):
             outcome = future.result()

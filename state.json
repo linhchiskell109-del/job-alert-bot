@@ -1,4 +1,5 @@
 {
+<<<<<<< HEAD
   "seen": {
     "709da7440eed78a986457e534855a5c534f04f1beca719e8dc2433be7e1c85ea": {
       "url": "https://jobs.smartrecruiters.com/Grab/744000137836764",
@@ -4316,3 +4317,7 @@
     }
   }
 }
+=======
+  "seen": {}
+}
+>>>>>>> 897221d (Improve scraper validation and parsing)
