@@ -78,3 +78,39 @@ known_locations:
     - "work from home"
     - "làm việc từ xa"
     - "lam viec tu xa"
+
+  # Các nước/thành phố khác (KHÔNG phải Việt Nam) — dùng làm "deny marker" khi
+  # job không trích được location (Unknown) nhưng title nêu rõ tên nước/thành
+  # phố khác, xem pipeline.py::_location_allowed. KHÔNG dùng để tách blob (case
+  # hiếm) nhưng cùng cơ chế tra cứu nên khai báo chung ở đây cho gọn.
+  "Indonesia":
+    - "indonesia"
+  "Brazil":
+    - "brazil"
+  "India":
+    - "india"
+    - "bangalore"
+    - "mumbai"
+    - "delhi"
+  "Philippines":
+    - "philippines"
+    - "pasig city"
+  "Thailand":
+    - "thailand"
+  "Malaysia":
+    - "malaysia"
+    - "petaling jaya"
+  "China":
+    - "china"
+  "United States":
+    - "usa"
+    - "united states"
+  "United Kingdom":
+    - "uk"
+    - "united kingdom"
+  "Japan":
+    - "japan"
+  "South Korea":
+    - "south korea"
+  "Australia":
+    - "australia"

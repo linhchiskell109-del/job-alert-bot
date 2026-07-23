@@ -99,6 +99,16 @@ nav_blocklist_phrases:
   - "back to search results"
   - "skip to content"
   - "skip to main content"
+  - "opens in a new tab"
+  - "opens in new tab"
+  - "opens in a new window"
+  - "opens in new window"
+  - "search & apply"
+  - "search and apply"
+  - "view details"
+  - "view job details"
+  - "see details"
+  - "read job description"
 
   # ---- Vietnamese ----
   - "tìm công việc"

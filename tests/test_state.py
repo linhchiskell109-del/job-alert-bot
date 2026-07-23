@@ -25,3 +25,30 @@ def test_is_new_and_mark_seen_roundtrip():
     assert is_new(state, job) is True
     mark_seen(state, job)
     assert is_new(state, job) is False
+
+
+def test_unknown_location_does_not_collapse_different_jobs():
+    # Audit bug thực tế: khi location="Unknown" (không trích được), 2 job KHÁC
+    # NHAU (URL khác) cùng company+title từng bị coi là 1 job — job thứ 2 bị
+    # nuốt mất, không bao giờ được báo.
+    job_a = {"company": "Coca-Cola", "title": "Warehouse Coordinator",
+             "location": "Unknown", "url": "https://x.com/job/111111"}
+    job_b = {"company": "Coca-Cola", "title": "Warehouse Coordinator",
+             "location": "Unknown", "url": "https://x.com/job/222222"}
+    assert job_hash(job_a) != job_hash(job_b)
+
+
+def test_unknown_location_hash_still_stable_across_query_param_churn():
+    job_v1 = {"company": "Coca-Cola", "title": "Warehouse Coordinator",
+              "location": "Unknown", "url": "https://x.com/job/111111"}
+    job_v2 = {"company": "Coca-Cola", "title": "Warehouse Coordinator",
+              "location": "Unknown", "url": "https://x.com/job/111111?utm=abc"}
+    assert job_hash(job_v1) == job_hash(job_v2)
+
+
+def test_known_location_hash_unaffected_by_unknown_location_fix():
+    # Job có location trích được bình thường -> hash KHÔNG đổi so với trước
+    # (không ảnh hưởng job đã có sẵn trong state.json cũ).
+    job_v1 = {"company": "MoMo", "title": "Associate Product Manager", "location": "Ho Chi Minh", "url": "https://momo.vn/apm-123"}
+    job_v2 = {"company": "MoMo", "title": "Associate Product Manager", "location": "Ho Chi Minh", "url": "https://momo.vn/apm-123?utm=xyz"}
+    assert job_hash(job_v1) == job_hash(job_v2)

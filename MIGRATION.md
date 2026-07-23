@@ -623,3 +623,152 @@ adapters, GitHub Actions workflow.
 
 **Tổng: 87/87 test pass** (`pytest tests/ -v`), gồm 13 test mới cho 4 yêu cầu
 lần này.
+
+---
+
+# v7 — Full pipeline audit: terminal status per job, observability, real bugs found & fixed
+
+## 1. Xác minh 3 fix gần nhất (mục 1 trong audit)
+
+Cả 3 đều đã verify bằng regression test thật (không chỉ đọc code):
+
+1. **Pipeline và matching engine nhất quán về Unknown location** —
+   `test_matching_engine_location_check_treats_unknown_as_ok` xác nhận
+   `matching/engine.py::_location_ok` không tự loại lại job "Unknown" mà
+   pipeline đã cho qua.
+2. **Nav/accessibility text không bao giờ thành title** —
+   `tests/test_validation_navtext.py` xác nhận "Opens in a new tab."/"Search &
+   Apply" bị chặn.
+3. **Job Unknown-location nhưng title nêu rõ nước khác bị loại an toàn** —
+   `test_unknown_location_with_explicit_foreign_country_in_title_is_denied`.
+
+**Nguyên tắc "title chỉ dùng để LOẠI, không bao giờ dùng để CHO QUA"** được áp
+dụng nhất quán ở CẢ 2 nơi kiểm tra location: `pipeline.py::_location_allowed`
+VÀ `matching/engine.py::_location_ok` — trước đây chỉ fix 1 chỗ, đợt audit
+này rà lại và xác nhận cả 2 đều đúng.
+
+## 2. Bug MỚI tìm được qua audit (không nằm trong 3 fix gần nhất)
+
+### 2a. Hash collision khi location = "Unknown" (`state.py`)
+
+Fallback "Unknown" (thêm ở v6 để không loại job thiếu location) vô tình làm
+**2 job THẬT SỰ KHÁC NHAU** (cùng company + title, cả 2 đều không trích được
+location — vd 2 đợt tuyển "Warehouse Coordinator" khác nhau) **có CÙNG HASH**
+— job thứ 2 bị coi là trùng, không bao giờ được báo. Đây là bug ẩn, chỉ lộ ra
+khi rà lại toàn bộ chuỗi `normalize -> job_hash` theo đúng yêu cầu "đừng giả
+định phần còn lại đúng".
+
+**Fix**: khi location "Unknown"/trống, hash thêm URL PATH (bỏ query string) làm
+tín hiệu phụ để phân biệt — vẫn ổn định qua thay đổi tracking param, nhưng
+không còn gộp nhầm 2 job khác nhau. Job có location trích được bình thường:
+hash KHÔNG đổi (không ảnh hưởng `state.json` cũ đang chạy production).
+Test: `test_unknown_location_does_not_collapse_different_jobs`.
+
+### 2b. Audit duplicate detection (mục 10)
+
+| Câu hỏi | Trả lời |
+|---|---|
+| Định danh dùng để dedup | `sha256(company \| title \| location [\| url_path nếu location Unknown])` — xem `state.py::job_hash` |
+| Vì sao ổn định | KHÔNG dựa vào toàn bộ URL — nhiều site gắn tracking param/session id đổi mỗi lần crawl dù cùng 1 job |
+| URL đổi có phá dedup không | KHÔNG (trường hợp bình thường, location trích được) — chỉ URL PATH mới ảnh hưởng, và chỉ khi location Unknown |
+| Sửa description có tạo "job mới" giả không | KHÔNG — description không nằm trong hash |
+| Title-only matching có gây collision không | KHÔNG dùng title-only — nhưng (company+title+location) VẪN có thể collision nếu 1 công ty đăng 2 job THẬT SỰ trùng cả title lẫn location (giới hạn đã biết, chấp nhận được — hiếm và ít rủi ro hơn báo trùng liên tục vì URL đổi) |
+| Location Unknown có gây collision không | CÓ (đã tìm thấy — xem 2a), ĐÃ FIX bằng URL path fallback |
+
+## 3. Kiến trúc mới: JobTrace — mọi job có ĐÚNG 1 terminal status
+
+`src/job_trace.py` — mỗi job crawl được bọc thành 1 `JobTrace`, đi qua đúng
+luồng:
+
+```
+CRAWLED -> NORMALIZED -> [REJECTED_VALIDATION | REJECTED_LOCATION | tiếp tục]
+                                                                        |
+                                                    matching engine (main.py)
+                                                                        |
+                        [REJECTED_FUNCTION | REJECTED_EXPERIENCE | REJECTED_SCORE | tiếp tục]
+                                                                        |
+                                                    duplicate check (main.py)
+                                                                        |
+                                          [ALREADY_NOTIFIED | NOTIFIED]
+```
+
+`pipeline.py::_trace_raw_jobs()` tạo trace cho MỌI job thô (Normalize ->
+Validate -> Location prefilter), `main.py::_process_trace()` tiếp tục
+(Matching -> Duplicate -> Notify). Trace nào cũng có `.job` (dict đã
+normalize) dù bị reject ở đâu — để shared portal vẫn phân loại brand được, và
+diagnostics vẫn tính extraction confidence được.
+
+**Bất biến (mục 9)**: `raw = REJECTED_VALIDATION + REJECTED_LOCATION +
+REJECTED_FUNCTION + REJECTED_EXPERIENCE + REJECTED_SCORE + ALREADY_NOTIFIED +
+NOTIFIED` — đúng THEO THIẾT KẾ (mỗi trace nhận đúng 1 trong 7 status này).
+`Diagnostics.verify_conservation()` verify RUNTIME (không chỉ tin thiết kế) —
+nếu có trace nào sót lại KHÔNG terminal (bug code path nào đó quên gọi
+`set_status`), in cảnh báo rõ ràng thay vì im lặng.
+
+## 4. Parser diagnostics (mục 11) — `pipeline.py::ScrapeStatus`
+
+Phân biệt RÕ "0 job vì thật sự không có job" với "0 job vì lỗi":
+
+```python
+ScrapeStatus(method="none", ok=True, raw_count=0, detail="...")   # thật sự không có job
+ScrapeStatus(method="html", ok=False, detail="html_scraper: lỗi (Connection timeout)")  # lỗi thật
+```
+
+Khi TẤT CẢ phương pháp đều fail, `detail` liệt kê ĐẦY ĐỦ những gì đã thử (ATS
+adapter/company parser/html/playwright) thay vì chỉ lỗi cuối cùng — vd:
+`"ATS adapter 'successfactors': lỗi (...); html_scraper: chạy OK, trả về 0 job; playwright_scraper: lỗi (Timeout 45000ms exceeded)"`.
+
+## 5. Observability layer — `src/diagnostics.py`
+
+| Yêu cầu | Hàm |
+|---|---|
+| Company recall report (mục 5, 12) | `print_company_funnel_table()` — Raw/Parsed/Validated/Matched/AlreadyNotified/NewNotifications + scrape status mỗi công ty |
+| Rejection breakdown theo công ty (mục 6) | `print_rejection_breakdown()` |
+| Luôn in accepted jobs, kể cả đã notify (mục 7) | `print_accepted_jobs()` |
+| Per-job decision cho job MATCHED (mục 4) | `print_per_job_decisions()` — đúng format trong yêu cầu |
+| Giải thích vì sao 0 notification (mục 8) | `explain_notifications()` |
+| Bất biến bảo toàn job (mục 9) | `verify_conservation()` / `print_conservation_check()` |
+| Extraction confidence (mục 13) | `job_trace.py::extraction_confidence()` — trọng số title 0.4/location 0.35/department 0.15/employment_type 0.10, field nào "Unknown"/rỗng không được tính |
+
+## 6. `--debug-company` (mục 15)
+
+```
+python src/main.py --debug-company Grab
+```
+
+Chỉ scrape + xử lý company/brand đó, in đầy đủ funnel + already-notified list +
+new-notifications list + rejection breakdown + extraction confidence từng job —
+xem `main.py::_filter_targets()` + `Diagnostics.print_debug_company()`. Chế độ
+này **KHÔNG bao giờ ghi `state.json`** (dù load state thật để tính đúng
+ALREADY_NOTIFIED) — thuần công cụ debug, không có side effect lên production.
+
+## 7. Regression protection (mục 14)
+
+Đã thêm: `tests/test_job_trace.py`, `tests/test_diagnostics.py`,
+`tests/test_pipeline_tracing.py`, mở rộng `tests/test_state.py`. Về "CI fail
+nếu 1 công ty đột nhiên chỉ ra 5 job thay vì 120" — cần dữ liệu lịch sử THẬT
+(snapshot số lượng job mỗi công ty qua các lần chạy) mà môi trường phát triển
+hiện tại không có quyền truy cập mạng thật để lấy — đề xuất: `main.py` có thể
+ghi `job_count_history.json` mỗi lần chạy thật (số raw job/công ty), rồi thêm
+1 check ở đầu `main()` so với lần chạy trước, cảnh báo nếu giảm > X% — CHƯA
+implement (cần quyết định ngưỡng % hợp lý, để tránh false alarm khi công ty
+thật sự giảm tin tuyển dụng).
+
+## 8. File mới / thay đổi
+
+| File | Thay đổi |
+|---|---|
+| `src/state.py` | Fix hash collision khi location Unknown (thêm URL path fallback) |
+| `src/job_trace.py` | **Mới** — JobTrace, terminal statuses, extraction_confidence |
+| `src/diagnostics.py` | **Mới** — company funnel, rejection breakdown, accepted jobs, per-job decisions, conservation check, debug-company report |
+| `src/pipeline.py` | `run_for_company`/`run_for_shared_portal` trả về `list[JobTrace]` + `ScrapeStatus` thay vì `list[dict]` + method string; thêm `ScrapeStatus` phân biệt lỗi vs 0-job-thật |
+| `src/main.py` | `_process_trace()` tiếp tục JobTrace qua matching/duplicate; thêm `--debug-company`; in đầy đủ report từ `diagnostics.py` |
+| `tests/test_job_trace.py`, `test_diagnostics.py`, `test_pipeline_tracing.py` | **Mới** |
+| `tests/test_state.py` | Thêm 3 test cho fix hash collision |
+
+**Không đổi**: `matching/engine.py` thuật toán (chỉ verify lại, không sửa gì
+thêm ngoài location check đã fix ở lần trước), `filters.py`, ATS adapters,
+`notifier.py`, GitHub Actions workflow.
+
+**Tổng: 115/115 test pass** (`pytest tests/ -v`), gồm 21 test mới cho đợt audit
+này.

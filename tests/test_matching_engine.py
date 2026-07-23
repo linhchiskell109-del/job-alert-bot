@@ -158,3 +158,21 @@ def test_business_excellence_and_pmo_functions_recognized():
     assert r1.accepted and r1.function == "business_excellence"
     r2 = _evaluate("Grab", "PMO Analyst")
     assert r2.accepted
+
+
+def test_matching_engine_location_check_treats_unknown_as_ok():
+    # Nhất quán với "không loại job chỉ vì thiếu location" — matching engine
+    # KHÔNG được tự loại lại job có location="Unknown" đã được pipeline cho
+    # qua (bug thực tế: "Rejected by location" cao bất thường vì check này).
+    job = {"company": "MoMo (M_Service)", "title": "Business Analyst", "location": "Unknown", "description": ""}
+    result = evaluate_job(job, {"name": "MoMo (M_Service)"}, ["vietnam", "hcmc"], TAXONOMY, SCORING, OVERRIDES)
+    assert result.accepted
+
+
+def test_matching_engine_location_check_does_not_trust_title():
+    # Cùng bug "- SEA" như pipeline.py, nhưng ở bên trong matching engine.
+    job = {"company": "MoMo (M_Service)", "title": "Business Analyst - SEA",
+           "location": "Jakarta, ID", "description": ""}
+    result = evaluate_job(job, {"name": "MoMo (M_Service)"}, ["vietnam", "hcmc"], TAXONOMY, SCORING, OVERRIDES)
+    assert not result.accepted
+    assert result.reason == "location"

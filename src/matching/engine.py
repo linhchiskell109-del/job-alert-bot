@@ -170,9 +170,19 @@ def detect_level(text_norm: str, text_tokens: set, taxonomy: Taxonomy) -> tuple:
 
 
 def _location_ok(job: dict, locations: list) -> bool:
+    """CHỈ xét field `location` — KHÔNG xét title (nhãn phạm vi kiểu "- SEA"/
+    "- Brazil" trong title không phản ánh nơi làm việc thật, xem
+    pipeline.py::_location_allowed để biết lý do — cùng 1 bug, 2 chỗ).
+    location "Unknown"/trống -> coi là OK (không đủ căn cứ để loại) — nhất
+    quán với normalize.py (không bao giờ loại job chỉ vì thiếu location) và
+    với pipeline.py's early location filter. Nếu không, job đã được early
+    filter cho qua (vì "Unknown") sẽ bị loại LẦN NỮA ở đây một cách mâu thuẫn."""
     if not locations:
         return True
-    haystack = _norm(f"{job.get('title', '')} {job.get('location', '')}")
+    location = str(job.get("location", "") or "").strip()
+    if not location or _norm(location) == _norm("Unknown"):
+        return True
+    haystack = _norm(location)
     return any(_contains(haystack, loc) for loc in locations)
 
 
