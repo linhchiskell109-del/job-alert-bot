@@ -1,11 +1,17 @@
 """Pipeline xử lý 1 công ty:
 
-0. Kiểm tra URL career có truy cập được không — nếu KHÔNG, log cảnh báo và BỎ QUA
-   công ty này ngay (không tự đoán URL khác, không chạy tiếp các bước sau).
+0a. Navigation Engine (src/navigation/) — CHỈ chạy khi `strategy` là "landing"
+    hoặc "search". Thực thi dãy action cấu hình (click_text/click_css/...) để
+    đi từ entry_url tới trang job listing/search thật, trả về URL đã điều
+    hướng tới. Company `strategy: "direct"` (mặc định) BỎ QUA bước này hoàn
+    toàn — dùng thẳng entry_url, HÀNH VI Y HỆT trước khi có Navigation Engine
+    (backward compatible).
+0b. Kiểm tra URL (đã resolve, nếu có) có truy cập được không — nếu KHÔNG, log
+    cảnh báo và BỎ QUA công ty này ngay (không tự đoán URL khác).
 1. Auto-detect ATS (Workday/Greenhouse/Lever/SmartRecruiters/Avature/SAP
-   SuccessFactors/Oracle Recruiting) từ URL — nếu là ATS có adapter, dùng thẳng
-   adapter đó. Oracle Recruiting được NHẬN DIỆN (log rõ) nhưng chưa có adapter
-   tin cậy, nên route tiếp xuống bước 2.
+   SuccessFactors/Oracle Recruiting) từ URL đã resolve — nếu là ATS có adapter,
+   dùng thẳng adapter đó. Oracle Recruiting được NHẬN DIỆN (log rõ) nhưng chưa
+   có adapter tin cậy, nên route tiếp xuống bước 2.
 2. Company-specific parser (COMPANY_PARSER_OVERRIDES — site JS SPA chưa xác
    định được ATS/API, cần lọc NGHIÊM NGẶT HƠN heuristic chung).
 3. html_scraper — LUÔN thử trước Playwright vì rẻ và nhanh hơn nhiều.
@@ -17,8 +23,16 @@
    giữ status "NORMALIZED" (chưa terminal) để main.py tiếp tục đưa vào matching
    engine.
 
+QUAN TRỌNG: Navigation Engine CHỈ đưa trình duyệt tới đúng URL rồi ĐÓNG session
+lại (trừ khi 1 parser tương lai cần keep_session=True) — parser hiện có (ATS
+adapter/html_scraper/playwright_scraper) hoàn toàn KHÔNG đổi, vẫn nhận URL
+string và tự fetch như trước, chỉ khác là URL đó đã được điều hướng tới thay vì
+là entry_url gốc.
+
 Không có bước nào trong pipeline này yêu cầu người dùng khai báo CSS selector hay
-loại ATS thủ công, và không có bước nào tự tạo ra URL/domain không có thật.
+loại ATS thủ công (trừ khi công ty đó dùng strategy=landing với action cần
+selector — khai báo trong config.yaml, KHÔNG hardcode trong .py), và không có
+bước nào tự tạo ra URL/domain không có thật.
 
 Hỗ trợ "shared portal" — 1 trang career dùng chung cho nhiều brand/công ty: scrape
 MỘT LẦN rồi phân loại TỪNG JobTrace theo brand bằng từ khoá, thay vì crawl lại.
@@ -28,6 +42,9 @@ from dataclasses import dataclass
 
 from ats_detector import DETECTED_ONLY_ATS, detect
 from job_trace import JobTrace, extraction_confidence
+from navigation.engine import navigate as navigation_navigate
+from navigation.errors import NavigationFailure, SelectorNotFound, TargetURLMismatch
+from navigation.errors import Timeout as NavigationTimeout
 from normalize import load_normalize_config, normalize_job
 from scrapers import (
     avature,
@@ -43,6 +60,8 @@ from scrapers import (
 from textnorm import normalize
 from url_utils import is_url_reachable
 from validation import validate_job
+
+STRATEGIES_REQUIRING_NAVIGATION = ("landing", "search")
 
 ATS_ADAPTERS = {
     "workday": workday.fetch,
@@ -125,10 +144,54 @@ def _location_allowed(job: dict, allowed_locations: tuple) -> bool:
 class ScrapeStatus:
     """Chẩn đoán CẤP CÔNG TY — phân biệt '0 job vì thật sự không có job nào'
     với '0 job vì parser/ATS lỗi' (yêu cầu 11 trong audit)."""
-    method: str          # "workday"|...|"avature"|"successfactors"|"company_parser"|"html"|"playwright"|"none"|"unreachable"
+    method: str          # "workday"|...|"avature"|"successfactors"|"company_parser"|"html"|"playwright"|"none"|"unreachable"|"navigation_failed"
     ok: bool              # True = quá trình scrape tự nó THÀNH CÔNG (không nghĩa là có job)
     raw_count: int = 0
     detail: str = ""      # lý do cụ thể khi ok=False (exception message, "unreachable", v.v.)
+
+
+def _resolve_entry_url(company_cfg: dict) -> tuple:
+    """Chạy Navigation Engine nếu strategy cần điều hướng. Trả về
+    (resolved_url, nav_warning, failure_status):
+      - strategy KHÔNG cần điều hướng ("direct"/"api"/không khai báo) ->
+        (url gốc, "", None).
+      - Điều hướng THÀNH CÔNG và khớp target_url (hoặc không cấu hình
+        target_url) -> (final_url, "", None).
+      - TargetURLMismatch -> (final_url THỰC TẾ, "<cảnh báo>", None) — KHÔNG
+        fatal, vẫn dùng final_url thực tế vì đáng tin hơn config có thể đã cũ
+        (site đổi cấu trúc); pipeline log cảnh báo rõ ràng thay vì âm thầm.
+      - Lỗi khác (SelectorNotFound/Timeout/NavigationFailure — bao gồm config
+        thiếu selector) -> (None, "", ScrapeStatus lỗi) — FATAL, công ty này bị
+        bỏ qua lần chạy này, lý do được ghi rõ trong ScrapeStatus.detail."""
+    strategy = (company_cfg.get("strategy") or "direct").lower()
+    url = company_cfg["url"]
+
+    if strategy not in STRATEGIES_REQUIRING_NAVIGATION:
+        return url, "", None
+
+    steps = company_cfg.get("navigation", [])
+    target_url = company_cfg.get("target_url")
+    retries = company_cfg.get("navigation_retries")
+    kwargs = {"target_url": target_url}
+    if retries is not None:
+        kwargs["retries"] = retries
+
+    try:
+        result = navigation_navigate(url, steps, **kwargs)
+        return result.final_url, "", None
+    except TargetURLMismatch as e:
+        final_url = getattr(e, "final_url", None)
+        if not final_url:
+            # Không có final_url kèm theo (không nên xảy ra với thiết kế hiện
+            # tại, nhưng phòng hờ) -> coi như fatal, không đoán URL nào khác.
+            return None, "", ScrapeStatus("navigation_failed", ok=False, detail=f"TargetURLMismatch (không rõ final_url): {e}")
+        return final_url, f"TargetURLMismatch: {e}", None
+    except SelectorNotFound as e:
+        return None, "", ScrapeStatus("navigation_failed", ok=False, detail=f"SelectorNotFound: {e}")
+    except NavigationTimeout as e:
+        return None, "", ScrapeStatus("navigation_failed", ok=False, detail=f"Timeout: {e}")
+    except NavigationFailure as e:
+        return None, "", ScrapeStatus("navigation_failed", ok=False, detail=f"NavigationFailure: {e}")
 
 
 def _trace_raw_jobs(raw_jobs: list, company: str, allowed_locations: tuple) -> list:
@@ -167,8 +230,15 @@ def run_for_company(company_cfg: dict, extra_keywords: tuple = (),
                      allowed_locations: tuple = ()) -> tuple:
     """Trả về (traces: list[JobTrace], scrape_status: ScrapeStatus)."""
     name = company_cfg["name"]
-    url = company_cfg["url"]
     attempts = []  # log các phương pháp đã thử + kết quả, để báo cáo đầy đủ khi mọi thứ đều fail
+
+    resolved_url, nav_warning, nav_failure = _resolve_entry_url(company_cfg)
+    if nav_failure is not None:
+        print(f"[WARN] {name}: Navigation Engine lỗi -> {nav_failure.detail}")
+        return [], nav_failure
+    if nav_warning:
+        print(f"[WARN] {name}: {nav_warning} — vẫn tiếp tục dùng URL thực tế điều hướng tới")
+    url = resolved_url
 
     if not is_url_reachable(url):
         print(f"[WARN] {name}: career URL không truy cập được ({url}) — bỏ qua công ty này (không tự đoán URL khác)")

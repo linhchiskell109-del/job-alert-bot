@@ -772,3 +772,146 @@ thêm ngoài location check đã fix ở lần trước), `filters.py`, ATS adap
 
 **Tổng: 115/115 test pass** (`pytest tests/ -v`), gồm 21 test mới cho đợt audit
 này.
+
+---
+
+# v8 — Navigation Engine
+
+## 1. Vấn đề đang giải quyết
+
+Nhiều career site (Techcombank, PwC, KPMG, EY-Parthenon, Masan, Unilever,
+Nestlé, VNG...) yêu cầu click qua 1 trang landing/marketing trước khi tới
+được trang job listing/search thật. Trước đây xử lý việc này cần Playwright
+logic viết riêng cho từng công ty. Navigation Engine thay thế bằng 1 lớp
+CONFIG-DRIVEN dùng chung.
+
+## 2. Kiến trúc
+
+```
+Entry URL
+   |
+   v
+Navigation Engine (src/navigation/)  <- CHỈ chạy khi strategy=landing/search
+   |
+   v
+Target Job URL (final_url)
+   |
+   v
+pipeline.py CHUỖI CŨ, KHÔNG ĐỔI: ATS detect -> adapter -> company parser ->
+html_scraper -> playwright_scraper -> Normalize -> Validate -> Location
+prefilter -> Matching -> Notification
+```
+
+`src/navigation/`:
+- `errors.py` — `NavigationFailure` (base), `SelectorNotFound`, `Timeout`,
+  `TargetURLMismatch` (mang theo `final_url` thực tế), `ParserFailure`.
+- `actions.py` — 11 action (`click_text/click_role/click_css/click_xpath/
+  click_icon/select_option/fill/press/wait_selector/wait_networkidle/
+  wait_timeout`), mỗi action `(page, params) -> None`, KHÔNG có `if company ==`
+  nào. Phân biệt SelectorNotFound (element không tồn tại trong DOM) vs Timeout
+  (element tồn tại nhưng action không hoàn tất kịp, vd bị che bởi overlay).
+- `engine.py` — `navigate(entry_url, steps, target_url=None, keep_session=False,
+  retries=2) -> NavigationResult(final_url, page, browser_context, browser,
+  logs)`. `keep_session=False` (mặc định) đóng browser ngay sau khi lấy
+  `final_url` — parser hiện tại chỉ cần URL string. `keep_session=True` giữ
+  session sống cho parser TƯƠNG LAI cần cookie/session (chưa ai dùng, nhưng
+  sẵn sàng — đúng yêu cầu "future-proof").
+
+## 3. Config-driven — `config.yaml`
+
+```yaml
+- name: "PwC Vietnam"
+  url: "https://www.pwc.com/vn/en/careers.html"
+  strategy: "landing"          # "direct" (mặc định) | "landing" | "search" | "api" (dự trữ)
+  navigation:
+    - click_text: "Experienced Professionals"
+  target_url: "https://www.pwc.com/vn/en/careers/experienced-jobs.html"
+```
+
+`strategy: "direct"` (mặc định khi bỏ trống) -> BỎ QUA Navigation Engine hoàn
+toàn, hành vi Y HỆT trước khi có tính năng này (yêu cầu 8).
+
+## 4. Áp dụng inventory (Career_Site.xlsx) — quyết định TỪNG công ty, không áp
+   dụng máy móc
+
+Đối chiếu 22 dòng trong inventory với config ĐÃ XÁC MINH TRỰC TIẾP từ các đợt
+audit trước (v3-v7):
+
+| Nhóm | Công ty | Quyết định | Lý do |
+|---|---|---|---|
+| Giữ direct (đã verify, URL inventory KHÁC — chưa kiểm chứng) | Bain, Zalo, Monee, Deloitte, Vinamilk | Giữ URL đã verify | URL inventory khác domain/path, KHÔNG có bằng chứng xác minh — không đánh đổi cấu hình đang chạy tốt lấy đường dẫn chưa kiểm chứng |
+| Giữ direct (đã verify, KHỚP inventory) | MoMo, McKinsey, BCG, Coca-Cola | Không đổi | target_url inventory trùng khớp URL hiện tại |
+| Giữ direct (API tốt hơn navigation) | Grab | Không đổi | ats_hint=smartrecruiters gọi thẳng public API, đáng tin hơn điều hướng qua browser dù cùng nguồn dữ liệu |
+| Chuyển sang landing (cải thiện thật, có verify) | Techcombank | strategy=landing | target_url inventory là URL search cụ thể (dạng SuccessFactors), tốt hơn hẳn bare-domain + strict_html cũ |
+| Chuyển sang landing (chưa từng verify trước đây) | PwC, KPMG, Masan, Nestlé, EY-Parthenon, VNG | strategy=landing | Config cũ chỉ là trang landing chưa qua kiểm chứng — áp dụng navigation từ inventory là cải thiện rõ ràng |
+| Áp dụng URL direct mới từ inventory | Roland Berger, P&G | strategy=direct, URL mới | Inventory cho URL cụ thể hơn hẳn (đã lọc theo Vietnam/All-Jobs), URL cũ chưa từng verify |
+| Landing nhưng THIẾU dữ liệu (không đoán) | Unilever | strategy=landing, `selector: null` | Inventory chỉ cho `select_option("Vietnam")`, KHÔNG có CSS selector dropdown — Navigation Engine từ chối đoán, raise `SelectorNotFound` rõ ràng ngay khi chạy. **Cần bổ sung `selector` thật trong config.yaml trước khi Unilever hoạt động qua navigation tự động** — cho tới lúc đó, công ty này ra 0 job mỗi lần chạy, lý do được ghi rõ trong `ScrapeStatus.detail`, không lặng lẽ. |
+
+Cột "Parser" trong inventory (Eightfold/Phenom/SAP Careers/React...) được coi
+là THÔNG TIN THAM KHẢO, KHÔNG map trực tiếp thành `ats_hint` — `ats_detector.py`
+tự nhận diện ATS thật từ URL/HTML ĐÃ ĐIỀU HƯỚNG TỚI (content-based), đáng tin
+hơn nhãn tĩnh trong 1 bảng có thể lỗi thời, và tránh phải xây thêm adapter cho
+Eightfold/Phenom/SAP Careers (ngoài phạm vi yêu cầu lần này — chỉ về
+navigation, không phải thêm ATS adapter mới).
+
+## 5. Xử lý lỗi & retry
+
+| Lỗi | Retry? | Hành vi |
+|---|---|---|
+| `SelectorNotFound` | KHÔNG | Config/DOM lệch — retry vô ích. `ScrapeStatus(method="navigation_failed", ok=False)`. |
+| `Timeout` | CÓ (mặc định 2 lần, chạy lại TOÀN BỘ dãy step) | Có thể transient (mạng/site chậm). |
+| `NavigationFailure` (chung) | CÓ | Lỗi browser không xác định cụ thể hơn — coi là transient. |
+| `TargetURLMismatch` | KHÔNG (và KHÔNG fatal) | final_url THỰC TẾ vẫn được dùng tiếp — chỉ log cảnh báo, vì final_url thực tế đáng tin hơn config có thể đã cũ. |
+| `ParserFailure` | KHÔNG (không nằm trong scope retry của Navigation Engine — retry chỉ bọc quanh `navigate()`, không bao giờ bọc quanh lệnh gọi parser) | Lỗi ở bước SAU navigation, xử lý y hệt cơ chế fallback parser đã có từ trước. |
+
+Không lỗi nào bị gộp chung thành "UNREACHABLE" — `ScrapeStatus.detail` luôn
+ghi rõ loại lỗi + message gốc.
+
+## 6. Testing (yêu cầu 9)
+
+`tests/test_navigation.py` — 12 test dùng **browser Chromium THẬT** (headless,
+không cần mạng — chạy trên fixture HTML cục bộ `tests/fixtures/navigation/`
+qua `file://`): successful navigation, selector not found, timeout (dùng
+overlay `pointer-events` thật để buộc Playwright timeout khi click — không
+giả lập), redirected URL, direct page (0 step), navigation logs, keep_session,
+target URL mismatch, retry logic (mock để đếm số lần thử chính xác).
+
+`tests/test_pipeline_navigation.py` — 10 test tích hợp vào `pipeline.py`
+(mock `navigate()` — không cần browser vì mục tiêu là verify pipeline gọi
+đúng chỗ/xử lý đúng lỗi, không phải verify hành vi browser lần nữa): direct
+strategy KHÔNG BAO GIỜ gọi Navigation Engine, landing strategy dùng URL đã
+resolve cho toàn bộ chuỗi phía sau, mỗi loại lỗi tạo `ScrapeStatus` riêng biệt
+(không có "unreachable" chung chung), TargetURLMismatch không fatal.
+
+## 7. File mới / thay đổi
+
+| File | Thay đổi |
+|---|---|
+| `src/navigation/errors.py` | **Mới** — 5 loại lỗi phân biệt |
+| `src/navigation/actions.py` | **Mới** — 11 action, generic, không company-specific |
+| `src/navigation/engine.py` | **Mới** — `navigate()`, `NavigationResult`, retry logic |
+| `src/pipeline.py` | Thêm `_resolve_entry_url()` gọi Navigation Engine trước chuỗi ATS-detect cũ; parser hiện có KHÔNG đổi 1 dòng nào |
+| `config.yaml` | Thêm `strategy`/`navigation`/`target_url` cho từng công ty theo inventory (đã đối chiếu kỹ với config đã verify trước đó — xem bảng mục 4) |
+| `tests/test_navigation.py`, `test_pipeline_navigation.py` | **Mới** — 22 test |
+| `tests/fixtures/navigation/*.html` | **Mới** — fixture cho test browser thật |
+
+**Không đổi**: mọi parser hiện có (`avature.py`, `successfactors_csb.py`,
+`html_scraper.py`, `playwright_scraper.py`, `strict_html.py`, v.v.), matching
+engine, validation, normalize, state/dedup, notifier, GitHub Actions workflow.
+
+**Tổng: 137/137 test pass** (`pytest tests/ -v`), gồm 22 test mới cho
+Navigation Engine.
+
+## 8. Việc còn lại cần người xác nhận
+
+- **Unilever**: cần cung cấp CSS selector thật của dropdown chọn quốc gia
+  (`config.yaml -> Unilever -> navigation[0].select_option.selector`) — hiện
+  đang `null` có chủ đích, sẽ báo lỗi rõ ràng mỗi lần chạy cho tới khi được
+  điền.
+- **Deloitte** (landing path trong inventory) cũng thiếu selector tương tự —
+  đã QUYẾT ĐỊNH giữ nguyên cấu hình `direct` cũ (đã verify, có auto-discovery)
+  thay vì áp dụng, nên không bị ảnh hưởng, nhưng nếu muốn dùng đúng path
+  inventory sau này cũng cần bổ sung selector.
+- Các discrepancy đã ghi chú trong comment `config.yaml` (Bain, Zalo, Monee,
+  Vinamilk) — URL inventory khác URL đã verify, cần xác minh thủ công nếu
+  muốn chuyển.

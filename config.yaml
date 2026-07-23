@@ -1,18 +1,43 @@
 # =========================================================================
-# CONFIG cho Job Alert Bot — v2.1
+# CONFIG cho Job Alert Bot — v3 (Navigation Engine)
 # =========================================================================
-# Mỗi công ty CHỈ CẦN "name" + "url" (link career/tuyển dụng đã được verify thủ
-# công — xem "companies" bên dưới). Bot tự động:
-#   - Kiểm tra URL còn truy cập được không (không tự đoán URL khác nếu chết)
-#   - Phát hiện ATS: Workday / Greenhouse / Lever / SmartRecruiters (có adapter
-#     public API) hoặc SAP SuccessFactors / Oracle Recruiting (chỉ nhận diện để
-#     route đúng, không có API public tin cậy nên dùng HTML/Playwright)
-#   - Nếu không phải ATS đã biết -> tự parse HTML tìm job (heuristic, không cần
-#     CSS selector)
-#   - Nếu HTML tĩnh không đủ (trang cần JS) -> tự fallback sang trình duyệt thật
+# Mỗi công ty cần "name" + "url" (entry_url) + "strategy":
+#   - "direct" (mặc định nếu bỏ trống) : url ĐÃ LÀ trang job listing/search —
+#     bỏ qua Navigation Engine, vào thẳng pipeline parse như trước giờ.
+#   - "landing" : url là trang landing/marketing, cần click/điều hướng qua
+#     Navigation Engine (xem src/navigation/) mới tới được trang job listing
+#     thật. Khai báo thêm "navigation" (danh sách action tuần tự) và nên có
+#     "target_url" (URL kỳ vọng sau khi điều hướng xong — dùng để CẢNH BÁO
+#     TargetURLMismatch nếu site đổi cấu trúc, KHÔNG chặn cứng: vẫn dùng URL
+#     THỰC TẾ điều hướng tới, vì đáng tin hơn config có thể đã cũ).
+#   - "search" : dự trữ cho tương lai (điều hướng qua 1 form tìm kiếm phức tạp
+#     hơn landing đơn thuần) — hiện xử lý giống "landing" (đều chạy qua
+#     Navigation Engine), tách riêng để dễ phân biệt khi cần logic khác sau này.
+#   - "api" : dự trữ cho tương lai (gọi thẳng 1 API không qua ATS adapter có
+#     sẵn) — hiện CHƯA implement, coi như "direct" (không qua Navigation Engine).
 #
-# Escape hatch (KHÔNG bắt buộc): nếu bạn đã biết chắc 1 công ty dùng ATS nào đó,
-# có thể khai báo thẳng để bỏ qua bước auto-detect, ví dụ:
+# Action hỗ trợ trong "navigation" (xem src/navigation/actions.py):
+#   click_text, click_role, click_css, click_xpath, click_icon, select_option,
+#   fill, press, wait_selector, wait_networkidle, wait_timeout.
+# Action nào cần selector (click_css/click_xpath/select_option/fill) PHẢI khai
+# báo rõ trong config — Navigation Engine KHÔNG BAO GIỜ tự đoán CSS selector.
+#
+# Nguồn dữ liệu navigation: file Career_Site.xlsx do người dùng cung cấp (coi
+# là "single source of truth"). Với công ty đã có URL/ats_hint XÁC MINH TRỰC
+# TIẾP từ các lần audit trước (ghi rõ trong comment "Xác minh lại..."), GIỮ
+# NGUYÊN "direct" ở URL đã verify thay vì chuyển sang "landing" chưa kiểm
+# chứng — tránh biến 1 config đang chạy tốt thành rủi ro chưa được xác minh.
+# Inventory's navigation path (nếu khác) được ghi lại dạng comment để tham
+# khảo/dùng sau khi ai đó xác minh được.
+#
+# Sau khi Navigation Engine chạy xong (nếu strategy=landing/search), toàn bộ
+# pipeline phía sau (auto-detect ATS -> adapter -> html -> playwright ->
+# Normalize -> Validate -> Location prefilter -> Matching -> Notification)
+# GIỮ NGUYÊN không đổi — Navigation Engine chỉ thay entry_url bằng URL đã
+# điều hướng tới, không đụng gì tới parser.
+#
+# Escape hatch (KHÔNG bắt buộc): nếu bạn đã biết chắc 1 công ty dùng ATS nào
+# đó, có thể khai báo thẳng để bỏ qua bước auto-detect, ví dụ:
 #   - name: "Some Company"
 #     url: "https://somecompany.com/careers"
 #     ats_hint: "greenhouse"
@@ -21,8 +46,12 @@
 
 companies:
   # ---------------- Vietnam tech / fintech ----------------
+  # Đã verify: url hiện tại CHÍNH LÀ target_url trong inventory -> giữ direct.
   - name: "MoMo (M_Service)"
     url: "https://momo.careers/jobs-opening"
+    strategy: "direct"
+    # Inventory: Landing, entry https://momo.careers/, click_text("Xem thêm")
+    # -> cùng target_url ở trên -> không cần điều hướng, vào thẳng đã đủ.
 
   # Xác minh lại 2026-07: www.grab.careers KHÔNG dùng SmartRecruiters làm
   # frontend (tự build, JS SPA nhẹ) nhưng dữ liệu job của Grab CŨNG được đăng
@@ -30,8 +59,13 @@ companies:
   # (careers.smartrecruiters.com/Grab, "powered by SmartRecruiters" ở footer).
   # SmartRecruiters có public API không cần key -> dùng ats_hint để gọi thẳng
   # API (nhanh, ổn định, có phân trang) thay vì scrape HTML/Playwright.
+  # -> GIỮ direct qua API, KHÔNG chuyển sang navigation (inventory: Landing,
+  # entry grab.careers/en/, click_text("View more") -> grab.careers/en/jobs/,
+  # parser SmartRecruiters — cùng nguồn dữ liệu, nhưng API trực tiếp đáng tin
+  # cậy hơn điều hướng qua trình duyệt).
   - name: "Grab"
     url: "https://careers.smartrecruiters.com/Grab"
+    strategy: "direct"
     ats_hint: "smartrecruiters"
     ats_params: { company_identifier: "Grab" }
 
@@ -39,108 +73,201 @@ companies:
   # Site tuyển dụng Vietnam thật là careers.shopee.vn (xác nhận qua Facebook
   # "Shopee Careers" chính chủ + fanpage). Trang là React SPA (HTML tĩnh rỗng,
   # job list render bằng JS) -> pipeline tự fallback html -> playwright.
+  # Inventory: Landing, click_text("Các vị trí đang tuyển") -> .../jobs?limit=
+  # 50&offset=0 (cùng path /jobs, chỉ thêm query phân trang) -> giữ direct.
   - name: "Shopee"
     url: "https://careers.shopee.vn/jobs"
+    strategy: "direct"
 
   # Xác minh lại 2026-07: "https://zalo.careers/" chỉ là trang chủ (landing),
   # danh sách job thật nằm ở "/jobs" (xác nhận qua LinkedIn chính chủ Zalo:
   # "Find your next job at zalo.careers/jobs"). Vẫn là Next.js SPA -> cần
   # playwright fallback (html_scraper sẽ trả 0, đúng như thiết kế).
+  # LƯU Ý: inventory ghi target_url khác — zalo.careers/job-list?page=1 (path
+  # "job-list" thay vì "jobs"). Không có bằng chứng xác minh cho path này, còn
+  # "/jobs" đã có trích dẫn LinkedIn chính chủ -> GIỮ "/jobs", ghi chú lại
+  # discrepancy này để kiểm tra thủ công nếu "/jobs" ngừng hoạt động.
   - name: "Zalo"
     url: "https://zalo.careers/jobs"
+    strategy: "direct"
 
-  # Career site render JS (chưa xác định ATS/API public) -> đăng ký dùng
-  # scrapers/strict_html.py qua COMPANY_PARSER_OVERRIDES trong pipeline.py
-  # (lọc theo job ID trong URL thay vì heuristic từ khoá lỏng lẻo — tránh nhặt
-  # nhầm nút điều hướng, xem báo cáo gốc "Techcombank → buttons instead of jobs").
+  # Inventory: Landing, click_text("Search") -> techcombankjobs.com/search/?...
+  # (URL có dạng SuccessFactors search results thật — nhiều tham số facet).
+  # Đây là cải thiện thật so với cấu hình cũ (chỉ dùng strict_html + Playwright
+  # đoán heuristic trên trang bare domain) -> CHUYỂN sang "landing" để tận
+  # dụng URL search cụ thể hơn; vẫn giữ Techcombank trong
+  # COMPANY_PARSER_OVERRIDES (pipeline.py) làm lưới an toàn nếu ATS auto-detect
+  # không nhận ra SuccessFactors từ URL điều hướng tới.
   - name: "Techcombank"
-    url: "https://techcombankjobs.com"
+    url: "https://www.techcombankjobs.com/"
+    strategy: "landing"
+    navigation:
+      - click_text: "Search"
+    target_url: "https://www.techcombankjobs.com/search/?createNewAlert=false&q=&locationsearch=&optionsFacetsDD_customfield1=&optionsFacetsDD_department=&optionsFacetsDD_shifttype=&optionsFacetsDD_facility="
 
   # Xác minh lại 2026-07: "https://careers.monee.com/careers" bị lỗi/không
   # đúng path (không tìm thấy khi tra cứu). URL đúng là "https://www.monee.com/jobs"
   # (job detail thật quan sát được: careers.monee.com/job-detail?id=...). Trang
   # là SPA (HTML tĩnh rỗng) -> cần playwright fallback.
+  # LƯU Ý: inventory ghi target khác — careers.monee.com/jobs (subdomain
+  # "careers." thay vì "www."). "www.monee.com/jobs" đã verify trực tiếp (page
+  # title "Jobs | Monee" quan sát được) -> GIỮ nguyên, ghi chú discrepancy.
   - name: "Monee"
     url: "https://www.monee.com/jobs"
+    strategy: "direct"
 
   # ---------------- Consulting ----------------
   # Xác minh lại 2026-07: "https://www.mckinsey.com/careers" là trang giới
   # thiệu (không có job list). URL đúng để scrape là trang search-jobs, filter
   # sẵn theo Vietnam để giảm nhiễu. Vẫn là SPA -> cần playwright fallback.
+  # Khớp CHÍNH XÁC target_url trong inventory (Landing, entry
+  # mckinsey.com/vn/careers-in-vietnam, click_text("Search jobs")) -> giữ direct
+  # ở target luôn, không cần chạy lại navigation mỗi lần.
   - name: "McKinsey & Company"
     url: "https://www.mckinsey.com/careers/search-jobs?countries=Vietnam"
+    strategy: "direct"
 
   # Xác minh lại 2026-07: "https://www.bain.com/careers" là trang marketing
   # (chứa các link điều hướng như "Work with Us", "Find a Role" — chính là
   # nguồn gốc lỗi scrape nhầm nav page). Job list THẬT nằm ở careers.bain.com
   # (ATS Avature riêng, xác nhận qua meta tag "avature.portal.*") — pipeline
   # tự nhận diện Avature qua ats_detector.py và dùng scrapers/avature.py.
+  # LƯU Ý: inventory ghi target khác hẳn (bain.com/careers/find-a-role/, cùng
+  # domain bain.com, không phải careers.bain.com) — CHƯA xác minh path đó có
+  # thật sự dẫn tới board Avature hay không -> GIỮ URL đã verify, không đánh
+  # đổi lấy 1 đường dẫn chưa kiểm chứng.
   - name: "Bain & Company"
     url: "https://careers.bain.com/jobs"
+    strategy: "direct"
 
-  # Xác minh lại 2026-07: "https://careers.bcg.com" (bare domain) redirect về
-  # trang marketing nhiều nav link ("Explore", "Learn More"...). URL đúng để
-  # scrape là trang search-results (Phenom People, JS SPA) -> cần playwright +
-  # scrapers/strict_html.py (COMPANY_PARSER_OVERRIDES trong pipeline.py) để
-  # lọc theo job ID thay vì heuristic từ khoá lỏng lẻo.
+  # Khớp CHÍNH XÁC target_url trong inventory (Landing, entry
+  # careers.bcg.com/global/en/, click_text("Search")) -> giữ direct ở target.
   - name: "Boston Consulting Group (BCG)"
     url: "https://careers.bcg.com/global/en/search-results"
+    strategy: "direct"
 
+  # Inventory: Direct, url = https://www.rolandberger.com/en/Join/All-Jobs/ —
+  # cụ thể hơn hẳn URL cũ (chỉ là trang "/en/Careers" chung chung, chưa từng
+  # verify). Áp dụng URL mới từ inventory.
   - name: "Roland Berger"
-    url: "https://www.rolandberger.com/en/Careers"
+    url: "https://www.rolandberger.com/en/Join/All-Jobs/"
+    strategy: "direct"
 
+  # Inventory: Landing, entry kpmg.com/vn/en/careers.html, click_text("Search
+  # Jobs") -> careers.kpmg.com.vn/search/?... (URL dạng SuccessFactors search
+  # results). URL cũ chỉ là trang landing chung, chưa từng verify -> áp dụng
+  # navigation từ inventory (cải thiện thật).
   - name: "KPMG Vietnam"
-    url: "https://kpmg.com/vn/en/home/careers.html"
+    url: "https://kpmg.com/vn/en/careers.html"
+    strategy: "landing"
+    navigation:
+      - click_text: "Search Jobs"
+    target_url: "https://careers.kpmg.com.vn/search/?createNewAlert=false&q=&locationsearch="
 
   # Xác minh lại 2026-07: careers.ey.com CŨNG là SAP SuccessFactors ("This
   # website is based on the SuccessFactors software provided by SAP" — xác
-  # nhận trực tiếp trên trang). ats_detector.py tự nhận diện + dùng
-  # scrapers/successfactors_csb.py (1-hop discovery), không cần đổi URL hay
-  # khai báo ats_hint thủ công — tự động fix luôn lỗi nhặt nhầm "What you can
-  # do here" trong báo cáo gốc.
+  # nhận trực tiếp trên trang) — dùng chung cho TOÀN BỘ EY, không riêng
+  # Parthenon. Inventory dùng trang riêng của EY-Parthenon
+  # (ey.com/en_vn/careers/parthenon, click_text("Experienced Professionals"))
+  # -> có khả năng cho kết quả LỌC ĐÚNG mảng Parthenon hơn (thay vì toàn bộ
+  # job EY nói chung) -> áp dụng navigation từ inventory cho công ty này.
   - name: "EY-Parthenon"
-    url: "https://careers.ey.com"
+    url: "https://www.ey.com/en_vn/careers/parthenon"
+    strategy: "landing"
+    navigation:
+      - click_text: "Experienced Professionals"
+    target_url: "https://careers.ey.com/ey/go/EY-EY-Parthenon-Strategy-and-Transactions/9616201/"
 
+  # Inventory: Landing, click_text("Experienced Professionals") -> URL cũ chỉ
+  # là trang landing chung, chưa từng verify -> áp dụng navigation từ inventory.
   - name: "PwC Vietnam"
     url: "https://www.pwc.com/vn/en/careers.html"
+    strategy: "landing"
+    navigation:
+      - click_text: "Experienced Professionals"
+    target_url: "https://www.pwc.com/vn/en/careers/experienced-jobs.html"
 
   # Xác minh lại 2026-07: đây là trang landing (chứa nav link "Show all jobs"
   # — chính là nguồn gốc lỗi scrape nhầm nav page trong báo cáo gốc). Xác nhận
   # đây là SAP SuccessFactors CSB (asset rmkcdn.successfactors.com) — HTML
   # tĩnh, 780 job hiển thị lúc kiểm tra tại link "Show all jobs" đó.
   # scrapers/successfactors_csb.py tự "1-hop discovery" tìm link listing thật
-  # bằng PATTERN URL (không dùng text "Show all jobs" để tạo Job) rồi scrape —
-  # nên GIỮ URL landing này (không hardcode thẳng URL listing có ID số, vì ID
-  # đó có thể đổi khi Deloitte relaunch site; landing URL ổn định hơn).
+  # bằng PATTERN URL (không dùng text "Show all jobs" để tạo Job) rồi scrape.
+  # Inventory dùng landing KHÁC (deloitte.com/global/en/careers/job-search.html,
+  # select_option("Vietnam") -> click_text("Search Jobs")) NHƯNG select_option
+  # không kèm selector trong inventory — Navigation Engine sẽ raise lỗi rõ
+  # ràng nếu dùng path này (KHÔNG tự đoán selector dropdown). GIỮ direct ở
+  # landing đã verify + auto-discovery, không chuyển sang path còn thiếu dữ
+  # liệu.
   - name: "Deloitte Vietnam"
     url: "https://jobs.sea.deloitte.com/"
+    strategy: "direct"
 
   # ---------------- FMCG ----------------
+  # Inventory: Direct, url pgcareers.com/global/en/locations/vietnam — cụ thể
+  # hơn (lọc sẵn Vietnam) so với domain trần cũ, chưa từng verify -> áp dụng.
   - name: "Procter & Gamble"
-    url: "https://www.pgcareers.com"
+    url: "https://www.pgcareers.com/global/en/locations/vietnam"
+    strategy: "direct"
 
+  # Inventory: Landing, click_text("Search Jobs") -> /search — URL cũ chỉ có
+  # locale param, chưa từng verify có thật sự lọc jobs -> áp dụng navigation.
   - name: "Masan Consumer Holdings"
-    url: "https://careers.masanconsumer.com/?locale=vi_VN"
+    url: "https://careers.masanconsumer.com/"
+    strategy: "landing"
+    navigation:
+      - click_text: "Search Jobs"
+    target_url: "https://careers.masanconsumer.com/search"
 
+  # Inventory: Landing, select_option("Vietnam") — CHỈ có value, KHÔNG có CSS
+  # selector cho dropdown. Navigation Engine KHÔNG tự đoán selector (theo yêu
+  # cầu) -> step dưới đây CỐ Ý để selector: null, engine sẽ raise lỗi cấu hình
+  # rõ ràng (không click bừa). Cần người biết DOM thật của trang điền
+  # "selector" trước khi công ty này chạy navigation tự động được. Tạm thời sẽ
+  # ra 0 job mỗi lần chạy cho tới khi đó (ScrapeStatus sẽ ghi rõ lý do, không
+  # âm thầm).
   - name: "Unilever"
-    url: "https://careers.unilever.com"
+    url: "https://careers.unilever.com/en"
+    strategy: "landing"
+    navigation:
+      - select_option: { selector: null, value: "Vietnam" }  # TODO: cần selector thật của dropdown quốc gia
+    target_url: "https://careers.unilever.com/en/search-jobs/Vietnam/34155/2/1562822/16x16667/107x83333/100/2"
 
+  # Inventory: Landing, click_text("Trang Web tuyển dụng Nestlé Việt Nam") ->
+  # nestle.com/jobs/search-jobs?keyword=&country=VN (lọc sẵn VN). URL cũ chỉ
+  # là nestle.com/jobs (khả năng không lọc theo nước) -> áp dụng navigation.
   - name: "Nestlé"
-    url: "https://www.nestle.com/jobs"
+    url: "https://www.nestle.com.vn/vi/jobs/jobs"
+    strategy: "landing"
+    navigation:
+      - click_text: "Trang Web tuyển dụng Nestlé Việt Nam"
+    target_url: "https://www.nestle.com/jobs/search-jobs?keyword=&country=VN"
 
+  # Khớp CHÍNH XÁC entry/target trong inventory (Direct) -> giữ nguyên.
   # Career site render JS (chưa xác định ATS/API public) -> đăng ký dùng
   # scrapers/strict_html.py qua COMPANY_PARSER_OVERRIDES trong pipeline.py
   # (lọc theo job ID trong URL — tránh nhặt nhầm "Career Areas" như báo cáo gốc).
   - name: "The Coca-Cola Company"
-    url: "https://careers.coca-colacompany.com"
+    url: "https://careers.coca-colacompany.com/"
+    strategy: "direct"
 
   # Xác minh lại 2026-07: URL này ĐÚNG — trang tuyển dụng là HTML tĩnh (server-
   # rendered, không cần JS), có 36 job hiển thị trực tiếp trong HTML lúc kiểm
   # tra. Nếu vẫn thấy 0 job dù URL reachable, nhiều khả năng do chặn bot theo
   # User-Agent/IP (Cloudfront) chứ không phải do heuristic hay URL sai — thử
   # playwright fallback (tự động) trước khi nghi ngờ URL.
+  # LƯU Ý: inventory ghi URL có thêm "/en/" (.../en/recruitment/career-
+  # opportunities) — chưa verify path đó, còn path không "/en/" đã verify có
+  # 36 job thật -> GIỮ nguyên, ghi chú discrepancy để kiểm tra thủ công.
   - name: "Vinamilk"
     url: "https://www.vinamilk.com.vn/recruitment/career-opportunities"
+    strategy: "direct"
+
+# =========================================================================
+# Từ khoá URL bổ sung (tuỳ chọn) — nếu 1 site dùng path pattern lạ (không nằm
+# trong danh sách mặc định ở src/heuristics.py), thêm ở đây thay vì sửa code.
+# Ví dụ: nếu 1 công ty dùng "/co-hoi/" thay vì "/tuyen-dung/", thêm "co-hoi" vào đây.
+# =========================================================================
 
 # =========================================================================
 # SHARED PORTAL: 1 trang career dùng chung cho nhiều brand -> scrape MỘT LẦN,
@@ -149,16 +276,22 @@ companies:
 # Zalo có trang career riêng (zalo.careers, đã khai báo ở "companies" bên trên)
 # nên KHÔNG nằm trong portal này.
 #
+# Inventory: Landing, click_icon("search") -> career.vng.com.vn/vi/tim-kiem-
+# viec-lam?fullTextSearch= (trang search kết quả, cụ thể hơn nhiều so với
+# trang landing bare domain cũ) -> áp dụng navigation từ inventory. Vẫn giữ
+# portal này trong COMPANY_PARSER_OVERRIDES (pipeline.py, key "VNG Careers
+# Portal") làm lưới an toàn nếu navigation/auto-detect không thành công.
+#
 # Brand có "default: true" là bucket mặc định — job không khớp từ khoá của bất
 # kỳ brand nào khác sẽ được xếp vào đây. Chỉ nên có ĐÚNG 1 brand default.
 # =========================================================================
 shared_portals:
-  # Career site render JS (Next.js SPA, chưa xác định ATS/API public) -> đăng
-  # ký dùng scrapers/strict_html.py qua COMPANY_PARSER_OVERRIDES trong
-  # pipeline.py (key "VNG Careers Portal" — khớp "name" portal, không phải
-  # brand) — tránh nhặt nhầm "Tìm công việc" như báo cáo gốc.
   - name: "VNG Careers Portal"
     url: "https://career.vng.com.vn/"
+    strategy: "landing"
+    navigation:
+      - click_icon: "search"
+    target_url: "https://career.vng.com.vn/vi/tim-kiem-viec-lam?fullTextSearch="
     brands:
       - company: "ZaloPay"
         match_keywords:
