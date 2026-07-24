@@ -54,8 +54,15 @@ class NavigationResult:
 def _normalize_step(raw_step) -> tuple:
     """1 step trong config là dict 1-key: {action_name: params}. `params` có
     thể là scalar (shorthand cho tham số chính) hoặc dict (đầy đủ). Trả về
-    (action_name, params_dict) đã chuẩn hoá — action nào nhận shorthand gì do
-    chính action function đó quy định qua bảng dưới."""
+    (action_name, params_dict, optional) đã chuẩn hoá — action nào nhận
+    shorthand gì do chính action function đó quy định qua bảng dưới.
+
+    `optional: true` là flag CẤP NAVIGATION ENGINE, KHÔNG PHẢI tham số của
+    action — áp dụng được cho MỌI action (click_text/click_css/select_option/
+    fill/...), không riêng gì cookie banner. Được `pop` ra khỏi params trước
+    khi truyền cho action function, để action function không cần biết khái
+    niệm "optional" tồn tại — tách biệt rõ "làm gì" (action) khỏi "thất bại
+    thì sao" (engine)."""
     if not isinstance(raw_step, dict) or len(raw_step) != 1:
         raise NavigationFailure(f"Navigation step không hợp lệ (phải là dict 1 key): {raw_step!r}")
     action_name, raw_params = next(iter(raw_step.items()))
@@ -67,7 +74,8 @@ def _normalize_step(raw_step) -> tuple:
     elif isinstance(raw_params, dict):
         params = dict(raw_params)
     else:
-        # shorthand scalar -> tham số chính của từng action
+        # shorthand scalar -> tham số chính của từng action (KHÔNG hỗ trợ
+        # optional ở dạng shorthand — cần dict để khai báo optional: true)
         shorthand_key = {
             "click_text": "text", "click_role": "name", "click_css": "selector",
             "click_xpath": "selector", "click_icon": "name", "fill": "value",
@@ -80,7 +88,8 @@ def _normalize_step(raw_step) -> tuple:
             )
         params = {shorthand_key: raw_params}
 
-    return action_name, params
+    optional = bool(params.pop("optional", False))
+    return action_name, params, optional
 
 
 def _describe_step(action_name: str, params: dict) -> str:
@@ -123,17 +132,33 @@ def _run_steps_once(entry_url: str, steps: list, target_url: str, keep_session: 
 
             total = len(steps)
             for i, raw_step in enumerate(steps, start=1):
-                action_name, params = _normalize_step(raw_step)
+                action_name, params, optional = _normalize_step(raw_step)
                 description = _describe_step(action_name, params)
+                if optional:
+                    description += " [optional]"
                 log.append(f"\nStep {i}/{total}")
                 log.append(description)
                 print(f"[Navigation] Step {i}/{total}: {description}")
                 try:
                     ACTIONS[action_name](page, params)
-                except NavigationFailure as e:
+                except Exception as e:
+                    if optional:
+                        # optional: true — KHÔNG BAO GIỜ làm hỏng cả chuỗi navigation,
+                        # dù lý do là element không tồn tại (SelectorNotFound) hay bất
+                        # kỳ lỗi nào khác (Timeout, lỗi Playwright không lường trước) —
+                        # log rõ lý do rồi tiếp tục sang step kế tiếp.
+                        if isinstance(e, SelectorNotFound):
+                            reason = "element không tồn tại"
+                        else:
+                            reason = f"lỗi không mong đợi ({e})"
+                        log.append(f"⚠ Optional step bỏ qua ({reason}) -> tiếp tục")
+                        print(f"[Navigation] ⚠ Optional step bỏ qua ({reason}) -> tiếp tục")
+                        continue
+                    if not isinstance(e, NavigationFailure):
+                        e = NavigationFailure(f"Lỗi không xác định ở action '{action_name}': {e}")
                     log.append(f"✗ Failed: {e}")
                     print(f"[Navigation] ✗ Failed: {e}")
-                    raise
+                    raise e
                 log.append("✓ Success")
                 print(f"[Navigation] ✓ Success")
 

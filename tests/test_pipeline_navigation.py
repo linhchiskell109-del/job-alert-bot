@@ -179,3 +179,26 @@ def test_pwc_style_bug_navigation_success_never_gets_marked_unreachable():
 
     mock_reachable.assert_not_called()  # không được gọi -> không thể bị báo sai unreachable
     assert status.method != "unreachable"
+
+
+def test_empty_navigation_list_uses_browser_as_reachability_proof():
+    """Cùng bug class như McKinsey/Vinamilk: site có bot-protection khiến
+    is_url_reachable() (request HTTP thuần) báo sai unreachable dù URL đúng.
+    strategy=landing với navigation=[] vẫn chạy Navigation Engine (page.goto()
+    bằng browser thật) -> pipeline coi đó là bằng chứng reachability, bỏ qua
+    is_url_reachable() hoàn toàn, dù KHÔNG có action nào trong danh sách."""
+    company_cfg = {
+        "name": "McKinsey & Company", "url": "https://www.mckinsey.com/careers/search-jobs?countries=Vietnam",
+        "strategy": "landing", "navigation": [],
+    }
+    fake_result = NavigationResult(final_url=company_cfg["url"], logs=[])
+    with patch("pipeline.navigation_navigate", return_value=fake_result) as mock_nav, \
+         patch("pipeline.is_url_reachable", return_value=False) as mock_reachable, \
+         patch("pipeline.detect", return_value=__import__("ats_detector").AtsMatch("html", {})), \
+         patch("pipeline.html_scraper.fetch", return_value=[]), \
+         patch("pipeline.playwright_scraper.fetch", return_value=[]):
+        traces, status = run_for_company(company_cfg)
+
+    mock_nav.assert_called_once()
+    mock_reachable.assert_not_called()
+    assert status.method != "unreachable"

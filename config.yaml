@@ -124,11 +124,24 @@ companies:
   # thiệu (không có job list). URL đúng để scrape là trang search-jobs, filter
   # sẵn theo Vietnam để giảm nhiễu. Vẫn là SPA -> cần playwright fallback.
   # Khớp CHÍNH XÁC target_url trong inventory (Landing, entry
-  # mckinsey.com/vn/careers-in-vietnam, click_text("Search jobs")) -> giữ direct
-  # ở target luôn, không cần chạy lại navigation mỗi lần.
+  # mckinsey.com/vn/careers-in-vietnam, click_text("Search jobs")).
+  #
+  # SỬA 2026-07 (audit "unreachable"): URL VẪN ĐÚNG (xác nhận lại — trang và
+  # các job detail bên dưới vẫn sống, được index gần đây). Nguyên nhân thật là
+  # BUG ở src/http_client.py::get() — raise_for_status() khiến MỌI response
+  # >=400 (kể cả 403 do site chặn client HTTP thuần, không phải "URL không
+  # tồn tại") bị is_url_reachable() coi là unreachable như nhau. McKinsey (site
+  # lớn, nhiều khả năng có WAF/bot-protection) rất có thể rơi vào trường hợp
+  # này. KHÔNG đổi URL — chuyển strategy sang "landing" với 0 navigation step:
+  # Navigation Engine vẫn `page.goto()` bằng browser thật (vượt qua chặn bot
+  # theo cách trình duyệt thật làm được, khác hẳn request HTTP trần), và theo
+  # fix trước đó, pipeline SẼ BỎ QUA is_url_reachable() hoàn toàn khi navigation
+  # (dù không có step nào) chạy thành công — browser trở thành phép thử
+  # reachability thay vì request HTTP thuần.
   - name: "McKinsey & Company"
     url: "https://www.mckinsey.com/careers/search-jobs?countries=Vietnam"
-    strategy: "direct"
+    strategy: "landing"
+    navigation: []
 
   # Xác minh lại 2026-07: "https://www.bain.com/careers" là trang marketing
   # (chứa các link điều hướng như "Work with Us", "Find a Role" — chính là
@@ -170,27 +183,41 @@ companies:
   # định sai chỉ cần 1 click, đúng như audit yêu cầu — sửa lại thành chuỗi 2
   # bước, target_url cập nhật theo URL THẬT đã quan sát (không phải URL
   # /search/?... đoán trước đó, chưa từng xác minh tồn tại).
+  # SỬA 2026-07 (audit "Timeout" trên click_text("Search for jobs")): text ĐÚNG
+  # (xác nhận lại qua fetch trực tiếp), nhưng Timeout (không phải
+  # SelectorNotFound) nghĩa là element TỒN TẠI mà click không hoàn tất kịp —
+  # dấu hiệu bị che bởi overlay. KPMG xác nhận có cookie consent banner trên
+  # site (privacy page + là khách hàng/đối tác triển khai OneTrust) — thêm 1
+  # step OPTIONAL dismiss banner trước khi click thật, dùng ID nút chuẩn của
+  # OneTrust (#onetrust-accept-btn-handler — ID CỐ ĐỊNH, tài liệu hoá công
+  # khai, dùng chung cho MỌI site triển khai OneTrust, không phải suy đoán
+  # riêng cho KPMG). optional: true -> nếu banner không xuất hiện (đã dismiss
+  # từ trước, hoặc site không dùng OneTrust), step này bị bỏ qua êm, KHÔNG làm
+  # hỏng cả chuỗi điều hướng.
   - name: "KPMG Vietnam"
     url: "https://kpmg.com/vn/en/careers.html"
     strategy: "landing"
     navigation:
+      - click_css: { selector: "#onetrust-accept-btn-handler", optional: true, exist_timeout_ms: 3000 }
       - click_text: "Search for jobs"
       - click_text: "View All Jobs"
     target_url: "https://careers.kpmg.com.vn/viewalljobs/"
 
-  # Xác minh lại 2026-07: careers.ey.com CŨNG là SAP SuccessFactors ("This
-  # website is based on the SuccessFactors software provided by SAP" — xác
-  # nhận trực tiếp trên trang) — dùng chung cho TOÀN BỘ EY, không riêng
-  # Parthenon. Inventory dùng trang riêng của EY-Parthenon
-  # (ey.com/en_vn/careers/parthenon, click_text("Experienced Professionals"))
-  # -> có khả năng cho kết quả LỌC ĐÚNG mảng Parthenon hơn (thay vì toàn bộ
-  # job EY nói chung) -> áp dụng navigation từ inventory cho công ty này.
+  # SỬA 2026-07 (audit Timeout trên click_text("Experienced Professionals")):
+  # "Experienced Professionals" nhiều khả năng là NHÃN TAB (toggle giữa
+  # "Experienced professionals"/"Early careers" kèm nút "✖ Close" quan sát
+  # được trên template chung của EY toàn cầu), không phải link — CTA thật là
+  # "Find jobs" nằm dưới tab, và có thể có nhiều bản sao trùng text trên trang
+  # (menu + hero) gây nhầm phần tử khi click. Thay vì tiếp tục điều hướng qua
+  # trang ey.com/en_vn/careers/parthenon vốn dễ vỡ, xác minh được EY-Parthenon
+  # có URL SuccessFactors TRỰC TIẾP, riêng cho brand Parthenon (không lẫn với
+  # toàn bộ job EY nói chung) — careers.ey.com/eyp/. Dùng thẳng URL này,
+  # scrapers/successfactors_csb.py tự "1-hop discovery" tìm link listing thật
+  # (cùng cơ chế đã dùng cho EY chính, Deloitte, KPMG) — không cần điều hướng
+  # qua browser nữa.
   - name: "EY-Parthenon"
-    url: "https://www.ey.com/en_vn/careers/parthenon"
-    strategy: "landing"
-    navigation:
-      - click_text: "Experienced Professionals"
-    target_url: "https://careers.ey.com/ey/go/EY-EY-Parthenon-Strategy-and-Transactions/9616201/"
+    url: "https://careers.ey.com/eyp/"
+    strategy: "direct"
 
   # Inventory: Landing, click_text("Experienced Professionals") -> URL cũ chỉ
   # là trang landing chung, chưa từng verify -> áp dụng navigation từ inventory.
@@ -262,11 +289,19 @@ companies:
   # Inventory: Landing, click_text("Trang Web tuyển dụng Nestlé Việt Nam") ->
   # nestle.com/jobs/search-jobs?keyword=&country=VN (lọc sẵn VN). URL cũ chỉ
   # là nestle.com/jobs (khả năng không lọc theo nước) -> áp dụng navigation.
+  # SỬA 2026-07 (audit SelectorNotFound trên click_text): xác nhận lại qua
+  # fetch trực tiếp — text "Trang Web tuyển dụng Nestlé Việt Nam" VẪN ĐÚNG và
+  # link VẪN TỒN TẠI, trỏ đúng target_url bên dưới. Có 1 link gần giống ngay
+  # cạnh ("...Nestlé toàn cầu") và trang dùng dấu tiếng Việt — nghi vấn lệch
+  # encoding Unicode dấu (dựng sẵn/tổ hợp) hoặc block render async khiến
+  # get_by_text không khớp được dù text "giống hệt" khi nhìn bằng mắt. Đổi
+  # sang click_css nhắm thẳng href đã xác minh — không phụ thuộc text hiển thị
+  # nữa, tránh toàn bộ nhóm nguyên nhân trên.
   - name: "Nestlé"
     url: "https://www.nestle.com.vn/vi/jobs/jobs"
     strategy: "landing"
     navigation:
-      - click_text: "Trang Web tuyển dụng Nestlé Việt Nam"
+      - click_css: "a[href*='nestle.com/jobs/search-jobs']"
     target_url: "https://www.nestle.com/jobs/search-jobs?keyword=&country=VN"
 
   # Khớp CHÍNH XÁC entry/target trong inventory (Direct) -> giữ nguyên.
@@ -279,15 +314,23 @@ companies:
 
   # Xác minh lại 2026-07: URL này ĐÚNG — trang tuyển dụng là HTML tĩnh (server-
   # rendered, không cần JS), có 36 job hiển thị trực tiếp trong HTML lúc kiểm
-  # tra. Nếu vẫn thấy 0 job dù URL reachable, nhiều khả năng do chặn bot theo
-  # User-Agent/IP (Cloudfront) chứ không phải do heuristic hay URL sai — thử
-  # playwright fallback (tự động) trước khi nghi ngờ URL.
+  # tra.
   # LƯU Ý: inventory ghi URL có thêm "/en/" (.../en/recruitment/career-
   # opportunities) — chưa verify path đó, còn path không "/en/" đã verify có
   # 36 job thật -> GIỮ nguyên, ghi chú discrepancy để kiểm tra thủ công.
+  #
+  # SỬA 2026-07 (audit "unreachable"): URL VẪN ĐÚNG (xác nhận lại — job detail
+  # dưới path này vẫn sống, được index gần đây). Xác nhận trực tiếp site này
+  # có bảo vệ reCAPTCHA/Google ("Trang web này được bảo vệ bởi reCAPTCHA và
+  # Google" — quan sát được trên 1 trang job detail) — cùng loại bug với
+  # McKinsey: is_url_reachable() (request HTTP thuần) coi 403/chặn bot là
+  # "unreachable" y hệt URL không tồn tại. KHÔNG đổi URL — áp dụng CÙNG fix:
+  # strategy "landing" với 0 navigation step, để browser thật (vượt qua chặn
+  # bot) thay thế request HTTP thuần làm phép thử reachability.
   - name: "Vinamilk"
     url: "https://www.vinamilk.com.vn/recruitment/career-opportunities"
-    strategy: "direct"
+    strategy: "landing"
+    navigation: []
 
 # =========================================================================
 # Từ khoá URL bổ sung (tuỳ chọn) — nếu 1 site dùng path pattern lạ (không nằm

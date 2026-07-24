@@ -114,6 +114,43 @@ def test_select_combobox_requires_explicit_input_selector():
         navigate(entry, [{"select_combobox": {"value": "Vietnam"}}], retries=0)
 
 
+def test_optional_step_missing_selector_does_not_abort_sequence():
+    entry = _file_url("landing.html")
+    target = _file_url("target.html")
+    result = navigate(entry, [
+        {"click_css": {"selector": "#nonexistent-cookie-banner", "optional": True, "exist_timeout_ms": 1000}},
+        {"click_text": "Search jobs"},
+    ], target_url=target, retries=0)
+    assert result.final_url == target
+
+
+def test_required_step_missing_selector_still_aborts_sequence():
+    entry = _file_url("landing.html")
+    with pytest.raises(SelectorNotFound):
+        navigate(entry, [
+            {"click_css": {"selector": "#nonexistent-cookie-banner", "exist_timeout_ms": 1000}},
+            {"click_text": "Search jobs"},
+        ], retries=0)
+
+
+def test_cookie_banner_blocks_click_without_dismiss_step():
+    """Xác nhận đúng giả thuyết KPMG: banner che toàn trang khiến click bị
+    Timeout (element tồn tại nhưng không click được), KHÔNG PHẢI SelectorNotFound."""
+    entry = _file_url("cookie_banner.html")
+    with pytest.raises(Timeout):
+        navigate(entry, [{"click_css": {"selector": "#search-link", "timeout_ms": 1500}}], retries=0)
+
+
+def test_optional_dismiss_step_unblocks_the_real_click():
+    entry = _file_url("cookie_banner.html")
+    target = _file_url("target.html")
+    result = navigate(entry, [
+        {"click_css": {"selector": "#onetrust-accept-btn-handler", "optional": True}},
+        {"click_css": "#search-link"},
+    ], target_url=target, retries=0)
+    assert result.final_url == target
+
+
 # ---------------------------------------------------------------------------
 # Retry logic — mocked (deterministic, no real browser timing dependency)
 # ---------------------------------------------------------------------------

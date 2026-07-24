@@ -14,6 +14,18 @@ selector riêng của từng site, sau khi trang load xong ta cuộn xuống đ�
 dụng được cho bất kỳ site nào dùng infinite scroll, không phải hack riêng cho 1
 công ty cụ thể.
 
+SỬA 2026-07 (audit BCG "Page.goto(..., wait_until='networkidle') timeout"):
+đổi từ "networkidle" sang "domcontentloaded". "networkidle" yêu cầu 500ms
+KHÔNG có bất kỳ network activity nào — nhiều site SPA hiện đại (chat widget,
+analytics beacon, polling, WebSocket) không bao giờ thật sự "idle" theo nghĩa
+này, khiến goto() timeout dù trang đã render xong nội dung cần thiết từ lâu.
+Đây là anti-pattern đã biết của Playwright (tài liệu chính thức cũng khuyến
+cáo tránh dùng networkidle cho các site kiểu này), KHÔNG phải vấn đề riêng của
+BCG — áp dụng chung cho MỌI công ty dùng scraper này. An toàn cho các site
+khác: dãy wait_for_timeout(1500) + 4 lần cuộn (đã có sẵn, không đổi) vẫn chạy
+y hệt sau goto(), chỉ khác là không còn phụ thuộc điều kiện "network hoàn toàn
+im lặng" vốn có thể treo vô thời hạn.
+
 Lưu ý kỹ thuật: mỗi lần gọi fetch() tự tạo 1 `sync_playwright()` instance riêng
 (không chia sẻ giữa các thread) — an toàn khi chạy trong ThreadPoolExecutor, đúng
 theo khuyến nghị của Playwright cho môi trường đa luồng. Số browser chạy đồng thời
@@ -41,8 +53,8 @@ def fetch(url: str, company: str, extra_keywords: tuple = ()) -> list[dict]:
             browser = p.chromium.launch(headless=True)
             page = browser.new_page(user_agent=_UA)
             try:
-                page.goto(url, timeout=45000, wait_until="networkidle")
-                # nhiều trang lazy-load list job ngay cả sau networkidle -> đợi thêm 1 nhịp
+                page.goto(url, timeout=45000, wait_until="domcontentloaded")
+                # nhiều trang lazy-load list job ngay cả sau domcontentloaded -> đợi thêm 1 nhịp
                 page.wait_for_timeout(1500)
 
                 for _ in range(SCROLL_PASSES):

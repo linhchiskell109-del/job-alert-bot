@@ -1020,3 +1020,125 @@ Test: `test_pwc_style_bug_navigation_success_never_gets_marked_unreachable`,
 | `tests/test_pipeline_navigation.py` | Cập nhật test theo hành vi reachability-check mới; thêm 2 test regression |
 
 **Tổng: 141/141 test pass** (`pytest tests/ -v`).
+
+---
+
+# v10 — Six-company root-cause fixes (config-driven, no company branches)
+
+Implements the fixes proposed after live investigation of each failure. Every
+fix is config-driven or a generic (non-company-specific) engine/parser change
+— no `if company == ...` was introduced anywhere.
+
+## 1. KPMG — generic `optional: true` step flag (new Navigation Engine capability)
+
+`src/navigation/engine.py::_normalize_step()` now pops an `optional` key out of
+ANY step's params (usable on `click_text`, `click_css`, `fill`,
+`select_option`, etc. — not hardcoded to cookie banners). In
+`_run_steps_once()`, if an optional step raises **any** exception — element
+not found or something else — it's logged (`⚠ Optional step bỏ qua (...) ->
+tiếp tục`) and the sequence continues; only non-optional steps still abort/
+retry as before.
+
+`config.yaml` — KPMG now has an optional first step dismissing a OneTrust
+cookie banner using OneTrust's fixed, documented button ID
+(`#onetrust-accept-btn-handler`, standard across all OneTrust deployments —
+platform-level knowledge, not a KPMG-specific guess) before the real
+`"Search for jobs"` click.
+
+**Verified with a real browser**, not just unit-mocked: built
+`tests/fixtures/navigation/cookie_banner.html` that reproduces the actual
+failure mode (a full-page overlay blocking the target click →
+`Timeout`, confirming the original diagnosis) and proved the optional dismiss
+step unblocks it.
+
+## 2. Nestlé — `click_text` → `click_css` on the verified href
+
+`config.yaml`: `click_css: "a[href*='nestle.com/jobs/search-jobs']"` instead
+of matching display text. Avoids the whole class of text-matching fragility
+(Vietnamese diacritic encoding, near-duplicate link text, possible async
+rendering) since the fix targets a verified, stable URL fragment instead.
+
+## 3. EY-Parthenon — verified direct SuccessFactors URL, no navigation
+
+`config.yaml`: `strategy: "direct"`, `url: "https://careers.ey.com/eyp/"` —
+a real, brand-scoped SuccessFactors URL found during investigation, more
+precise than the previous EY-wide URL and far more reliable than clicking
+through what's likely a tab toggle (not a real link) on the marketing page.
+`scrapers/successfactors_csb.py`'s existing 1-hop discovery (already proven
+for EY main and Deloitte) takes it from there — zero new code.
+
+## 4 & 5. McKinsey & Vinamilk — browser becomes the reachability check
+
+**Root cause was a bug in shared HTTP utility, not the URLs.**
+`src/http_client.py::get()` calls `resp.raise_for_status()`, and
+`url_utils.py::is_url_reachable()` catches *any* resulting exception and
+returns `False` — collapsing "site blocked our plain HTTP client (403/bot
+protection)" and "URL genuinely doesn't exist" into the same signal. Both
+companies' URLs were independently reverified as live and current.
+
+**Fix**: `config.yaml` sets `strategy: "landing"` with `navigation: []` for
+both — the URL is unchanged. Per the reachability-check fix from the previous
+round, when navigation runs (even with zero steps) and succeeds, `pipeline.py`
+skips `is_url_reachable()` entirely and trusts the real browser instead —
+which gets past bot-blocking the way a human visitor's browser does. Verified
+with `test_empty_navigation_list_uses_browser_as_reachability_proof`.
+
+**Not fixed in this round** (flagged, scope intentionally excluded per your
+request to avoid bundling): `is_url_reachable()`'s inability to distinguish
+"blocked" from "doesn't exist" is a systemic risk that could affect other
+companies silently. Worth a dedicated fix later.
+
+## 6. BCG — `networkidle` → `domcontentloaded` in the shared parser
+
+`src/scrapers/playwright_scraper.py`: `wait_until="networkidle"` →
+`"domcontentloaded"`. `networkidle` requires 500ms of *zero* network activity
+— SPA sites with chat widgets, analytics beacons, or polling (like BCG's
+Phenom-People-powered page) may never reach it, causing `goto()` to hang until
+timeout even though usable content rendered long ago. This is a documented
+Playwright anti-pattern, not BCG-specific, and the fix applies uniformly to
+every company using this shared parser (Shopee, Zalo, Monee, and everything
+routed through `strict_html.py`).
+
+**Verified with a real local HTTP server** (not mocked) with a slow polling
+endpoint that reproduces exactly this failure: confirmed `networkidle` times
+out on it while `domcontentloaded` completes in milliseconds and still
+extracts the job correctly (`tests/test_playwright_scraper_networkidle.py`).
+The existing settle-wait (1500ms) + 4 scroll passes are unchanged, so
+well-behaved sites see no reduction in effective wait time — only the
+indefinite-hang failure mode is removed.
+
+## Trade-offs
+
+- **KPMG's `optional: true`** only suppresses failures for that one step; if
+  the *real* "Search for jobs" click itself is ever wrong, the sequence still
+  fails loudly as before — optional is deliberately scoped to the cookie-step
+  only, not a blanket "ignore errors" mode.
+- **McKinsey/Vinamilk now launch a full headless browser** on every run
+  instead of a lightweight HTTP HEAD/GET, which is slower and heavier per
+  company. Accepted trade-off: correctness (not silently skipping a working
+  company) over speed, consistent with the "accuracy over speed" directive
+  for this whole effort. `MAX_WORKERS` bounds overall concurrency so this
+  doesn't scale unboundedly.
+- **EY-Parthenon's new URL is brand-scoped**, which may return a narrower job
+  set than the previous EY-wide URL — intentional, since narrower-but-correct
+  is preferable to broader-but-fragile for this specific brand.
+- **domcontentloaded fires earlier than networkidle** in general, so pages
+  with genuinely important content that loads *very* late (beyond the
+  existing 1500ms + scroll-pass budget) could theoretically be captured
+  slightly less completely than before — mitigated by the existing settle
+  wait, but not eliminated. No regression observed against any currently
+  configured company's expected structure.
+
+## Files changed
+
+| File | Change |
+|---|---|
+| `src/navigation/engine.py` | Generic `optional: true` step flag |
+| `src/scrapers/playwright_scraper.py` | `networkidle` → `domcontentloaded` |
+| `config.yaml` | KPMG (optional cookie step), Nestlé (click_css), EY-Parthenon (direct URL), McKinsey (landing + empty nav), Vinamilk (landing + empty nav) |
+| `tests/fixtures/navigation/cookie_banner.html` | **New** — real cookie-banner-blocking-click fixture |
+| `tests/test_navigation.py` | +5 tests for `optional` flag (including the KPMG scenario end-to-end) |
+| `tests/test_pipeline_navigation.py` | +1 test for empty-navigation reachability pattern |
+| `tests/test_playwright_scraper_networkidle.py` | **New** — real local-server regression test for the BCG fix |
+
+**Total: 147/147 tests pass** (`pytest tests/ -v`), including 24 tests exercising a real headless browser (not mocked) and 1 exercising a real local HTTP server.
