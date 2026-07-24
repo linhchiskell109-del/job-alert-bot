@@ -194,12 +194,28 @@ companies:
   # riêng cho KPMG). optional: true -> nếu banner không xuất hiện (đã dismiss
   # từ trước, hoặc site không dùng OneTrust), step này bị bỏ qua êm, KHÔNG làm
   # hỏng cả chuỗi điều hướng.
+  # SỬA 2026-07 (audit lần 2): text "View All Jobs" ĐƯỢC XÁC NHẬN tồn tại
+  # (fetch trực tiếp careers.kpmg.com.vn/, link footer nguyên văn "View All
+  # Jobs" trỏ /viewalljobs/). Nguyên nhân thất bại thật: trang này ở DOMAIN
+  # KHÁC (careers.kpmg.com.vn, không phải kpmg.com) — cookie/session KHÔNG
+  # mang qua domain khác, nên banner cookie XUẤT HIỆN LẠI ở đây, lần này do
+  # "SAP as service provider" (không phải OneTrust — xác nhận trực tiếp trong
+  # HTML: "We use the following session cookies... SAP as service provider"),
+  # nên step optional dismiss OneTrust cũ KHÔNG che được banner này (đúng như
+  # thiết kế optional — không lỗi, chỉ không tác dụng ở đây). Quan sát trực
+  # tiếp text nút thật trên chính trang này: "Accept All Cookies" — thêm 1
+  # step optional thứ 2 dùng text đã quan sát được (không suy đoán ID).
+  # LƯU Ý CHƯA XÁC MINH ĐƯỢC: liệu /viewalljobs/ có thật sự chứa danh sách job
+  # trích xuất được hay không — fetch tĩnh cho thấy nội dung giống trang chủ
+  # (banner theo Audit/Consulting/Tax...), có thể cần JS để render danh sách
+  # job thật. Cần theo dõi log thực tế sau khi click thành công để xác nhận.
   - name: "KPMG Vietnam"
     url: "https://kpmg.com/vn/en/careers.html"
     strategy: "landing"
     navigation:
       - click_css: { selector: "#onetrust-accept-btn-handler", optional: true, exist_timeout_ms: 3000 }
       - click_text: "Search for jobs"
+      - click_text: { text: "Accept All Cookies", optional: true, exist_timeout_ms: 3000 }
       - click_text: "View All Jobs"
     target_url: "https://careers.kpmg.com.vn/viewalljobs/"
 
@@ -297,12 +313,20 @@ companies:
   # get_by_text không khớp được dù text "giống hệt" khi nhìn bằng mắt. Đổi
   # sang click_css nhắm thẳng href đã xác minh — không phụ thuộc text hiển thị
   # nữa, tránh toàn bộ nhóm nguyên nhân trên.
+  # SỬA 2026-07 (audit SelectorNotFound lần 2): href cấu hình trước đó SAI —
+  # "nestle.com/jobs/search-jobs" (domain global bare) KHÔNG PHẢI trang thật.
+  # Xác nhận qua fetch trực tiếp: trang search-jobs THẬT nằm CÙNG domain với
+  # entry_url (www.nestle.com.vn), không phải domain global — fetch trực tiếp
+  # https://www.nestle.com.vn/en/jobs/search-jobs xác nhận có 10 job Việt Nam
+  # thật hiển thị tĩnh trong HTML (Medical Brand Manager, Category Executive...).
+  # Menu điều hướng trên chính trang entry_url có mục "Tìm kiếm công việc" trỏ
+  # tới bản /vi/ của cùng trang này — dùng link đó thay vì suy đoán domain khác.
   - name: "Nestlé"
     url: "https://www.nestle.com.vn/vi/jobs/jobs"
     strategy: "landing"
     navigation:
-      - click_css: "a[href*='nestle.com/jobs/search-jobs']"
-    target_url: "https://www.nestle.com/jobs/search-jobs?keyword=&country=VN"
+      - click_css: "a[href*='nestle.com.vn/vi/jobs/search-jobs']"
+    target_url: "https://www.nestle.com.vn/vi/jobs/search-jobs"
 
   # Khớp CHÍNH XÁC entry/target trong inventory (Direct) -> giữ nguyên.
   # Career site render JS (chưa xác định ATS/API public) -> đăng ký dùng
@@ -319,16 +343,28 @@ companies:
   # opportunities) — chưa verify path đó, còn path không "/en/" đã verify có
   # 36 job thật -> GIỮ nguyên, ghi chú discrepancy để kiểm tra thủ công.
   #
-  # SỬA 2026-07 (audit "unreachable"): URL VẪN ĐÚNG (xác nhận lại — job detail
-  # dưới path này vẫn sống, được index gần đây). Xác nhận trực tiếp site này
-  # có bảo vệ reCAPTCHA/Google ("Trang web này được bảo vệ bởi reCAPTCHA và
-  # Google" — quan sát được trên 1 trang job detail) — cùng loại bug với
-  # McKinsey: is_url_reachable() (request HTTP thuần) coi 403/chặn bot là
-  # "unreachable" y hệt URL không tồn tại. KHÔNG đổi URL — áp dụng CÙNG fix:
-  # strategy "landing" với 0 navigation step, để browser thật (vượt qua chặn
-  # bot) thay thế request HTTP thuần làm phép thử reachability.
+  # SỬA 2026-07 (audit "unreachable"): URL VẪN ĐÚNG lúc đó (job detail dưới
+  # path này vẫn sống). Xác nhận trực tiếp site này có bảo vệ reCAPTCHA/Google
+  # ("Trang web này được bảo vệ bởi reCAPTCHA và Google" — quan sát được trên
+  # 1 trang job detail) — cùng loại bug với McKinsey: is_url_reachable()
+  # (request HTTP thuần) coi 403/chặn bot là "unreachable" y hệt URL không
+  # tồn tại. KHÔNG đổi URL lúc đó — áp dụng strategy "landing" với 0
+  # navigation step, browser thật thay thế request HTTP thuần làm phép thử
+  # reachability.
+  #
+  # SỬA 2026-07 (audit lần 2, "Playwright chạy OK nhưng 0 job"): tìm thấy
+  # bằng chứng site Vinamilk ĐANG PHÂN MẢNH qua nhiều domain (www.vinamilk.com.vn,
+  # new.vinamilk.com.vn, careers.vinamilk.com.vn đều có nội dung tuyển dụng
+  # thật, index gần đây). Path ĐANG CẤU HÌNH (không "/en/") KHÔNG xuất hiện
+  # trong kết quả tìm kiếm mới nhất; path "/en/recruitment/career-opportunities/..."
+  # xuất hiện với job đăng trong tháng gần đây (Senior Retail Operations
+  # Specialist, Manager Retail Store Operations, Communication & Content
+  # Planner). Đổi sang path "/en/" theo bằng chứng mới hơn. CHƯA XÁC MINH ĐƯỢC
+  # (cần theo dõi log thật): liệu riêng việc đổi URL có giải quyết triệt để
+  # triệu chứng "Playwright chạy OK nhưng 0 job" hay không — không đủ công cụ
+  # để render JS trực tiếp từ môi trường này mà xác nhận chắc chắn.
   - name: "Vinamilk"
-    url: "https://www.vinamilk.com.vn/recruitment/career-opportunities"
+    url: "https://www.vinamilk.com.vn/en/recruitment/career-opportunities"
     strategy: "landing"
     navigation: []
 

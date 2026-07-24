@@ -26,6 +26,12 @@ khác: dãy wait_for_timeout(1500) + 4 lần cuộn (đã có sẵn, không đ�
 y hệt sau goto(), chỉ khác là không còn phụ thuộc điều kiện "network hoàn toàn
 im lặng" vốn có thể treo vô thời hạn.
 
+SỬA 2026-07 (cùng fix áp dụng cho Navigation Engine, xem navigation/engine.py):
+thêm flag "--headless=new" khi launch Chromium — sửa lỗi net::ERR_HTTP2_PROTOCOL_ERROR
+đã biết của chế độ headless "cũ" khi thương lượng HTTP/2 với 1 số site (xác nhận
+qua nhiều báo cáo độc lập trên repo Playwright, KHÔNG phải lỗi riêng của công ty
+nào — áp dụng chung cho MỌI công ty dùng scraper này).
+
 Lưu ý kỹ thuật: mỗi lần gọi fetch() tự tạo 1 `sync_playwright()` instance riêng
 (không chia sẻ giữa các thread) — an toàn khi chạy trong ThreadPoolExecutor, đúng
 theo khuyến nghị của Playwright cho môi trường đa luồng. Số browser chạy đồng thời
@@ -50,7 +56,7 @@ SCROLL_WAIT_MS = 800
 def fetch(url: str, company: str, extra_keywords: tuple = ()) -> list[dict]:
     with PLAYWRIGHT_SEMAPHORE:
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
+            browser = p.chromium.launch(headless=True, args=["--headless=new"])
             page = browser.new_page(user_agent=_UA)
             try:
                 page.goto(url, timeout=45000, wait_until="domcontentloaded")

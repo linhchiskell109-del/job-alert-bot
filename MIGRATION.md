@@ -1142,3 +1142,90 @@ indefinite-hang failure mode is removed.
 | `tests/test_playwright_scraper_networkidle.py` | **New** — real local-server regression test for the BCG fix |
 
 **Total: 147/147 tests pass** (`pytest tests/ -v`), including 24 tests exercising a real headless browser (not mocked) and 1 exercising a real local HTTP server.
+
+---
+
+# v11 — Follow-up fixes with concrete DOM/documented-pattern evidence
+
+This round required actual re-fetching of live pages rather than reasoning
+from earlier findings — two of the four (Nestlé, Vinamilk) turned up new
+evidence that **contradicted** conclusions from the previous round. Documented
+here plainly, including where confidence is still incomplete.
+
+## 1. KPMG — cross-domain cookie consent (SAP, not OneTrust)
+
+**Confirmed via direct fetch**: "View All Jobs" text is real (footer nav,
+`careers.kpmg.com.vn/`, verbatim `[View All Jobs](.../viewalljobs/ "View All
+Jobs")`). The click still failing points to the same failure class as before,
+one hop later — the page explicitly states its cookie consent is delivered by
+**"SAP as service provider"**, a different system than the OneTrust banner on
+`kpmg.com`. Since cookies are domain-scoped, navigating from `kpmg.com` to
+`careers.kpmg.com.vn` plausibly triggers a **fresh** consent banner our
+existing OneTrust-only dismiss step can't see. The literal button text
+**"Accept All Cookies"** was directly observed in that page's HTML — used
+as-is, not guessed.
+
+`config.yaml`: added a second `optional: true` step (`click_text: "Accept All
+Cookies"`) between the domain hop and the "View All Jobs" click.
+
+**Open / unconfirmed**: static fetch of `/viewalljobs/` shows the same
+carousel/hero content as the KPMG homepage, not an obvious job-listing table —
+whether this page contains extractable job data even once reached couldn't be
+confirmed without JS execution. Flagged for verification against real run
+logs after this fix ships.
+
+## 2. Nestlé — the previous fix's URL was itself wrong
+
+**Direct fetch evidence**: `nestle.com/jobs/search-jobs` (global bare domain,
+what was configured after the last round) is not the real page. The actual,
+live, working search page — directly fetched, showing 10 real current Vietnam
+postings (Medical Brand Manager, Category Executive, etc.) — is
+`www.nestle.com.vn/en/jobs/search-jobs`, same domain as the entry page. The
+entry page's own nav menu links to the `/vi/` locale variant of the same URL.
+`config.yaml` updated to target that verified href directly.
+
+## 3. McKinsey — documented Chromium bug, not anti-bot
+
+Could not reproduce the HTTP/2 handshake myself (no live network access to
+mckinsey.com from this environment), so this is **documented-pattern research**,
+not direct reproduction — labeled as such deliberately. Multiple independent
+sources, including Playwright's own issue tracker (maintainers tagged it
+"a bug in something Playwright depends on, like a browser" —
+[#31240](https://github.com/microsoft/playwright/issues/31240),
+[#36001](https://github.com/microsoft/playwright/issues/36001)), converge on
+`net::ERR_HTTP2_PROTOCOL_ERROR` under legacy headless Chromium being fixed by
+`--headless=new`. Applied to `navigation/engine.py` and, for consistency
+(same underlying browser bug, not McKinsey-specific), to
+`scrapers/playwright_scraper.py`.
+
+## 4. Vinamilk — still not fully resolved, said so directly
+
+Found real evidence the site has fragmented across three live domains
+(`www.vinamilk.com.vn`, `new.vinamilk.com.vn`, `careers.vinamilk.com.vn`).
+The previously-configured path (no locale prefix) did not surface in fresh
+search results; the `/en/` variant did, with postings dated within the last
+month. Switched to that path as the best-evidenced option available.
+**I could not confirm this resolves "Playwright succeeds, 0 jobs"** — said
+so explicitly rather than asserting a fix I haven't verified. Needs a real
+run to confirm.
+
+## Files changed
+
+| File | Change |
+|---|---|
+| `src/navigation/engine.py` | `args=["--headless=new"]` on Chromium launch |
+| `src/scrapers/playwright_scraper.py` | Same flag, applied for consistency |
+| `config.yaml` | KPMG (2nd optional cookie step), Nestlé (corrected real URL), Vinamilk (corrected URL, unresolved root cause flagged) |
+
+**Total: still 147/147 tests pass** (no new tests added this round — the
+changes are config data and a one-line launch-arg fix already covered by
+existing navigation/engine and playwright_scraper test suites).
+
+## Honesty note on tooling limits
+
+I do not have live network access to any of these four domains from this
+environment (sandboxed egress is allowlisted to package registries only), and
+my fetch tool does not execute JavaScript. Everything above is either (a) a
+concrete match found in a real static HTML fetch, explicitly marked as such,
+or (b) documented external research, explicitly marked as such — never
+presented as a live browser reproduction I didn't actually perform.

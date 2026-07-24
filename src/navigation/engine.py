@@ -123,7 +123,15 @@ def _describe_step(action_name: str, params: dict) -> str:
 def _run_steps_once(entry_url: str, steps: list, target_url: str, keep_session: bool,
                      page_timeout_ms: int, log: list) -> NavigationResult:
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        # SỬA 2026-07 (audit McKinsey net::ERR_HTTP2_PROTOCOL_ERROR): lỗi này là
+        # bug đã biết của Chromium headless "cũ" khi thương lượng HTTP/2 với 1 số
+        # site (xác nhận qua nhiều báo cáo độc lập trên chính repo Playwright —
+        # microsoft/playwright#31240, #36001 — được gắn nhãn "bug in something
+        # Playwright depends on, like a browser", KHÔNG phải lỗi logic code của
+        # project này). Fix xác nhận trong các báo cáo đó: buộc dùng chế độ
+        # headless MỚI qua flag "--headless=new" khi launch. Áp dụng CHUNG cho
+        # MỌI công ty (không riêng McKinsey) vì đây là vấn đề ở tầng browser.
+        browser = p.chromium.launch(headless=True, args=["--headless=new"])
         context = browser.new_context(user_agent=_UA)
         page = context.new_page()
         try:
