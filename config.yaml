@@ -98,11 +98,14 @@ companies:
   # dụng URL search cụ thể hơn; vẫn giữ Techcombank trong
   # COMPANY_PARSER_OVERRIDES (pipeline.py) làm lưới an toàn nếu ATS auto-detect
   # không nhận ra SuccessFactors từ URL điều hướng tới.
+  # SỬA 2026-07 (verify thủ công): text nút thật là "Search Jobs", KHÔNG phải
+  # "Search" — "Search" không khớp (get_by_text không match substring rời rạc
+  # kiểu này) nên bước điều hướng cũ luôn thất bại với SelectorNotFound.
   - name: "Techcombank"
     url: "https://www.techcombankjobs.com/"
     strategy: "landing"
     navigation:
-      - click_text: "Search"
+      - click_text: "Search Jobs"
     target_url: "https://www.techcombankjobs.com/search/?createNewAlert=false&q=&locationsearch=&optionsFacetsDD_customfield1=&optionsFacetsDD_department=&optionsFacetsDD_shifttype=&optionsFacetsDD_facility="
 
   # Xác minh lại 2026-07: "https://careers.monee.com/careers" bị lỗi/không
@@ -157,12 +160,23 @@ companies:
   # Jobs") -> careers.kpmg.com.vn/search/?... (URL dạng SuccessFactors search
   # results). URL cũ chỉ là trang landing chung, chưa từng verify -> áp dụng
   # navigation từ inventory (cải thiện thật).
+  # SỬA 2026-07 (verify thủ công qua fetch trực tiếp): trang landing
+  # kpmg.com/vn/en/careers.html KHÔNG có nút "Search Jobs" — chỉ có link
+  # "Search for jobs" (dưới mục "Exprienced professionals") dẫn tới
+  # careers.kpmg.com.vn/ (xác nhận đây là SAP SuccessFactors CSB, asset
+  # rmkcdn.successfactors.com). Trang đó CŨNG chưa phải trang kết quả search —
+  # cần thêm 1 bước: click "View All Jobs" (link thật quan sát được:
+  # careers.kpmg.com.vn/viewalljobs/) mới tới danh sách job. Cấu hình cũ giả
+  # định sai chỉ cần 1 click, đúng như audit yêu cầu — sửa lại thành chuỗi 2
+  # bước, target_url cập nhật theo URL THẬT đã quan sát (không phải URL
+  # /search/?... đoán trước đó, chưa từng xác minh tồn tại).
   - name: "KPMG Vietnam"
     url: "https://kpmg.com/vn/en/careers.html"
     strategy: "landing"
     navigation:
-      - click_text: "Search Jobs"
-    target_url: "https://careers.kpmg.com.vn/search/?createNewAlert=false&q=&locationsearch="
+      - click_text: "Search for jobs"
+      - click_text: "View All Jobs"
+    target_url: "https://careers.kpmg.com.vn/viewalljobs/"
 
   # Xác minh lại 2026-07: careers.ey.com CŨNG là SAP SuccessFactors ("This
   # website is based on the SuccessFactors software provided by SAP" — xác
@@ -226,12 +240,24 @@ companies:
   # "selector" trước khi công ty này chạy navigation tự động được. Tạm thời sẽ
   # ra 0 job mỗi lần chạy cho tới khi đó (ScrapeStatus sẽ ghi rõ lý do, không
   # âm thầm).
+  # SỬA 2026-07: xác minh trực tiếp qua tìm kiếm — careers.unilever.com dùng
+  # widget dạng combobox/autocomplete tự build (KHÔNG phải <select> gốc) cho
+  # ô chọn quốc gia, đúng như audit chỉ ra — select_option() không áp dụng
+  # được và cấu hình cũ (selector: null) sẽ luôn lỗi. Navigation Engine giờ
+  # có action select_combobox() hỗ trợ đúng loại widget này (xem
+  # src/navigation/actions.py), NHƯNG với Unilever có cách tốt hơn hẳn: phát
+  # hiện được board Workday CÔNG KHAI thật của Unilever
+  # (unilever.wd3.myworkdayjobs.com/Unilever_Experienced_Professionals) qua
+  # tìm kiếm — gọi thẳng API Workday có sẵn (src/scrapers/workday.py), KHÔNG
+  # cần điều hướng qua browser/combobox chút nào: nhanh hơn, ổn định hơn,
+  # không phụ thuộc DOM của trang careers.unilever.com có đổi hay không. API
+  # trả về job ở MỌI quốc gia (không lọc sẵn) — pipeline lọc Việt Nam như mọi
+  # công ty khác qua early location filter, không cần lọc phía server.
   - name: "Unilever"
-    url: "https://careers.unilever.com/en"
-    strategy: "landing"
-    navigation:
-      - select_option: { selector: null, value: "Vietnam" }  # TODO: cần selector thật của dropdown quốc gia
-    target_url: "https://careers.unilever.com/en/search-jobs/Vietnam/34155/2/1562822/16x16667/107x83333/100/2"
+    url: "https://unilever.wd3.myworkdayjobs.com/Unilever_Experienced_Professionals"
+    strategy: "direct"
+    ats_hint: "workday"
+    ats_params: { tenant: "unilever", wd_number: "wd3", site: "Unilever_Experienced_Professionals" }
 
   # Inventory: Landing, click_text("Trang Web tuyển dụng Nestlé Việt Nam") ->
   # nestle.com/jobs/search-jobs?keyword=&country=VN (lọc sẵn VN). URL cũ chỉ

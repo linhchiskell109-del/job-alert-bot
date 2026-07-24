@@ -240,7 +240,17 @@ def run_for_company(company_cfg: dict, extra_keywords: tuple = (),
         print(f"[WARN] {name}: {nav_warning} — vẫn tiếp tục dùng URL thực tế điều hướng tới")
     url = resolved_url
 
-    if not is_url_reachable(url):
+    navigated = (company_cfg.get("strategy") or "direct").lower() in STRATEGIES_REQUIRING_NAVIGATION
+    if navigated:
+        # Navigation Engine đã CHỨNG MINH URL này load được bằng browser THẬT —
+        # tín hiệu đáng tin hơn hẳn 1 request HTTP thuần (requests) tiếp theo,
+        # vốn có thể bị site chặn (thiếu cookie/session/referer mà browser vừa
+        # có, hoặc chặn theo User-Agent khác) dù trang THỰC SỰ load được — bug
+        # thật đã xảy ra với PwC (navigate thành công nhưng is_url_reachable()
+        # sau đó lại báo unreachable). KHÔNG kiểm tra lại, dùng thẳng URL đã
+        # điều hướng tới.
+        print(f"[INFO] {name}: Navigation Engine đã xác nhận URL load được -> bỏ qua reachability check thuần HTTP")
+    elif not is_url_reachable(url):
         print(f"[WARN] {name}: career URL không truy cập được ({url}) — bỏ qua công ty này (không tự đoán URL khác)")
         return [], ScrapeStatus("unreachable", ok=False, detail=f"URL không truy cập được: {url}")
 

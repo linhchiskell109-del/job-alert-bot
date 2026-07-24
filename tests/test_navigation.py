@@ -99,6 +99,21 @@ def test_landing_page_with_no_steps_returns_entry_url_unchanged():
     assert result.final_url == entry
 
 
+def test_select_combobox_handles_autocomplete_widget_not_native_select():
+    entry = _file_url("combobox.html")
+    result = navigate(entry, [
+        {"select_combobox": {"input_selector": "#country-input", "value": "Vietnam"}},
+    ])
+    assert "target.html?country=Vietnam" in result.final_url
+
+
+def test_select_combobox_requires_explicit_input_selector():
+    from navigation.errors import SelectorNotFound
+    entry = _file_url("combobox.html")
+    with pytest.raises(SelectorNotFound):
+        navigate(entry, [{"select_combobox": {"value": "Vietnam"}}], retries=0)
+
+
 # ---------------------------------------------------------------------------
 # Retry logic — mocked (deterministic, no real browser timing dependency)
 # ---------------------------------------------------------------------------

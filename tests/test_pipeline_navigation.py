@@ -55,7 +55,7 @@ def test_landing_strategy_resolves_url_before_ats_detect():
     }
     fake_result = NavigationResult(final_url="https://x.com/search-results", logs=["ok"])
     with patch("pipeline.navigation_navigate", return_value=fake_result) as mock_nav, \
-         patch("pipeline.is_url_reachable", return_value=True) as mock_reachable, \
+         patch("pipeline.is_url_reachable") as mock_reachable, \
          patch("pipeline.detect", return_value=__import__("ats_detector").AtsMatch("html", {})), \
          patch("pipeline.html_scraper.fetch", return_value=[]), \
          patch("pipeline.playwright_scraper.fetch", return_value=[]):
@@ -64,8 +64,10 @@ def test_landing_strategy_resolves_url_before_ats_detect():
     mock_nav.assert_called_once()
     call_args = mock_nav.call_args
     assert call_args[0][0] == "https://x.com/landing"  # entry_url đúng
-    # is_url_reachable() phải được gọi với URL ĐÃ RESOLVE, không phải entry_url gốc
-    mock_reachable.assert_called_once_with("https://x.com/search-results")
+    # Navigation Engine đã chứng minh URL load được bằng browser thật -> KHÔNG
+    # kiểm tra lại bằng request HTTP thuần (bug thật đã xảy ra với PwC: navigate
+    # thành công nhưng is_url_reachable() sau đó lại báo sai UNREACHABLE).
+    mock_reachable.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -119,16 +121,18 @@ def test_target_url_mismatch_is_not_fatal_and_uses_real_final_url():
     }
     mismatch = TargetURLMismatch("URL lech", final_url="https://x.com/actual-different-page")
     with patch("pipeline.navigation_navigate", side_effect=mismatch), \
-         patch("pipeline.is_url_reachable", return_value=True) as mock_reachable, \
+         patch("pipeline.is_url_reachable") as mock_reachable, \
          patch("pipeline.detect", return_value=__import__("ats_detector").AtsMatch("html", {})), \
-         patch("pipeline.html_scraper.fetch", return_value=[]), \
+         patch("pipeline.html_scraper.fetch", return_value=[{"title": "Business Analyst", "url": "https://x.com/actual-different-page/j1", "location": "Hanoi"}]), \
          patch("pipeline.playwright_scraper.fetch", return_value=[]):
         traces, status = run_for_company(company_cfg)
 
     # KHÔNG return sớm với navigation_failed -- pipeline tiếp tục chạy bình
-    # thường bằng final_url thực tế.
-    mock_reachable.assert_called_once_with("https://x.com/actual-different-page")
+    # thường bằng final_url thực tế, và KHÔNG gọi lại is_url_reachable (đã
+    # được Navigation Engine chứng minh load được).
+    mock_reachable.assert_not_called()
     assert status.method != "navigation_failed"
+    assert len(traces) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -142,3 +146,36 @@ def test_navigation_retries_config_override_is_passed_through():
     with patch("pipeline.navigation_navigate", return_value=fake_result) as mock_nav:
         _resolve_entry_url(company_cfg)
     assert mock_nav.call_args.kwargs.get("retries") == 5
+
+
+def test_direct_strategy_still_performs_reachability_check_unaffected():
+    """Company strategy=direct KHÔNG có navigation chứng minh URL load được ->
+    vẫn PHẢI giữ nguyên hành vi is_url_reachable() như trước (backward compat)."""
+    company_cfg = {"name": "X", "url": "https://x.com/jobs", "strategy": "direct"}
+    with patch("pipeline.is_url_reachable", return_value=False) as mock_reachable:
+        traces, status = run_for_company(company_cfg)
+    mock_reachable.assert_called_once_with("https://x.com/jobs")
+    assert status.method == "unreachable"
+
+
+def test_pwc_style_bug_navigation_success_never_gets_marked_unreachable():
+    """Regression test cho bug thực tế: PwC navigate() thành công (browser thật
+    load được trang), nhưng is_url_reachable() (request HTTP thuần) sau đó lại
+    báo sai UNREACHABLE vì site chặn request không có cookie/session/UA mà
+    browser vừa có. Fix: bỏ qua is_url_reachable() hoàn toàn khi navigation đã
+    tự chứng minh URL load được."""
+    company_cfg = {
+        "name": "PwC Vietnam", "url": "https://www.pwc.com/vn/en/careers.html", "strategy": "landing",
+        "navigation": [{"click_text": "Experienced Professionals"}],
+        "target_url": "https://www.pwc.com/vn/en/careers/experienced-jobs.html",
+    }
+    fake_result = NavigationResult(final_url="https://www.pwc.com/vn/en/careers/experienced-jobs.html", logs=[])
+    with patch("pipeline.navigation_navigate", return_value=fake_result), \
+         patch("pipeline.is_url_reachable", return_value=False) as mock_reachable, \
+         patch("pipeline.detect", return_value=__import__("ats_detector").AtsMatch("html", {})), \
+         patch("pipeline.html_scraper.fetch", return_value=[]), \
+         patch("pipeline.playwright_scraper.fetch", return_value=[]):
+        traces, status = run_for_company(company_cfg)
+
+    mock_reachable.assert_not_called()  # không được gọi -> không thể bị báo sai unreachable
+    assert status.method != "unreachable"

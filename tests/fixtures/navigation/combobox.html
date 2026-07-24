@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head><title>Combobox</title></head>
+<body>
+  <input id="country-input" type="text" autocomplete="off" oninput="onType(this.value)" />
+  <ul id="options" style="display:none;"></ul>
+  <script>
+    var DATA = ["Vietnam", "Thailand", "Malaysia", "Singapore"];
+    function onType(v) {
+      var ul = document.getElementById('options');
+      ul.innerHTML = '';
+      var matches = DATA.filter(function(x){ return x.toLowerCase().indexOf(v.toLowerCase()) !== -1; });
+      matches.forEach(function(m) {
+        var li = document.createElement('li');
+        li.setAttribute('role', 'option');
+        li.textContent = m;
+        li.onclick = function() { window.location.href = 'target.html?country=' + m; };
+        ul.appendChild(li);
+      });
+      ul.style.display = matches.length ? 'block' : 'none';
+    }
+  </script>
+</body>
+</html>

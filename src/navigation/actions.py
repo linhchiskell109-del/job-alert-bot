@@ -114,6 +114,51 @@ def select_option(page, params: dict):
                 f"select_option({selector!r}, {value!r})")
 
 
+def select_combobox(page, params: dict):
+    """Cho combobox/autocomplete widget KHÔNG PHẢI <select> gốc (thường gặp ở
+    site dùng React/Vue tự build dropdown, vd Unilever) — <select> gốc thì
+    dùng select_option() ở trên. Chuỗi thao tác: focus/click ô input -> gõ
+    value -> đợi 1 nhịp cho danh sách gợi ý render -> click option khớp value.
+
+    Cần khai báo `input_selector` (ô input để click+gõ) — vẫn KHÔNG tự đoán
+    selector, giống mọi action khác. `option_role` mặc định "option" (chuẩn
+    ARIA cho item trong listbox/combobox) — dùng get_by_role trước, nếu
+    option không lộ role chuẩn thì tự fallback sang khớp text hiển thị."""
+    input_selector = params.get("input_selector") or params.get("selector")
+    value = params.get("value")
+    option_role = params.get("option_role", "option")
+    wait_after_fill_ms = params.get("wait_after_fill_ms", 800)
+    exist_ms, action_ms = _timeouts(params)
+
+    if not input_selector:
+        raise SelectorNotFound(
+            f"select_combobox(value={value!r}): thiếu 'input_selector' trong config — Navigation "
+            f"Engine KHÔNG tự đoán selector ô input, cần khai báo rõ trong config.yaml."
+        )
+
+    _assert_exists(page, input_selector, exist_ms, f"select_combobox({input_selector!r}, {value!r}) [input]")
+    input_locator = page.locator(input_selector).first
+    _run_action(lambda: input_locator.click(timeout=action_ms),
+                f"select_combobox({input_selector!r}, {value!r}) [focus input]")
+    _run_action(lambda: input_locator.fill(value, timeout=action_ms),
+                f"select_combobox({input_selector!r}, {value!r}) [fill]")
+
+    page.wait_for_timeout(wait_after_fill_ms)  # đợi debounce của widget render gợi ý
+
+    option_locator = page.get_by_role(option_role, name=value).first
+    if not _locator_visible_soon(option_locator, exist_ms):
+        # Fallback: nhiều combobox tự build không set đúng role="option" chuẩn
+        # ARIA -> thử khớp theo text hiển thị thay vì bỏ cuộc ngay.
+        option_locator = page.get_by_text(value, exact=False).first
+        if not _locator_visible_soon(option_locator, exist_ms):
+            raise SelectorNotFound(
+                f"select_combobox({input_selector!r}, {value!r}): không thấy option khớp "
+                f"(đã thử role={option_role!r} và text={value!r}) sau khi gõ vào ô input"
+            )
+    _run_action(lambda: option_locator.click(timeout=action_ms),
+                f"select_combobox({input_selector!r}, {value!r}) [click option]")
+
+
 def fill(page, params: dict):
     selector = params.get("selector")
     value = params.get("value", "")
@@ -163,6 +208,7 @@ ACTIONS = {
     "click_xpath": click_xpath,
     "click_icon": click_icon,
     "select_option": select_option,
+    "select_combobox": select_combobox,
     "fill": fill,
     "press": press,
     "wait_selector": wait_selector,

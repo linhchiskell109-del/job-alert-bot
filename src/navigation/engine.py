@@ -96,6 +96,8 @@ def _describe_step(action_name: str, params: dict) -> str:
         return f'click_icon("{params.get("name")}")'
     if action_name == "select_option":
         return f'select_option(selector="{params.get("selector")}", value="{params.get("value")}")'
+    if action_name == "select_combobox":
+        return f'select_combobox(input_selector="{params.get("input_selector") or params.get("selector")}", value="{params.get("value")}")'
     if action_name == "fill":
         return f'fill(selector="{params.get("selector")}", value="{params.get("value")}")'
     if action_name == "press":

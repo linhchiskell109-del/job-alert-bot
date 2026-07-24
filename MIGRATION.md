@@ -915,3 +915,108 @@ Navigation Engine.
 - Các discrepancy đã ghi chú trong comment `config.yaml` (Bain, Zalo, Monee,
   Vinamilk) — URL inventory khác URL đã verify, cần xác minh thủ công nếu
   muốn chuyển.
+
+---
+
+# v9 — Navigation config corrections (manual verification follow-up)
+
+## 1. Techcombank — text sai
+
+Text nút thật là **"Search Jobs"**, không phải "Search" (Playwright's
+`get_by_text` không khớp substring rời rạc kiểu "Search" ⊂ "Search Jobs" theo
+cách người viết config kỳ vọng). Sửa `config.yaml`.
+
+## 2. KPMG Vietnam — thiếu 1 bước điều hướng
+
+Xác minh trực tiếp qua fetch `kpmg.com/vn/en/careers.html`: trang này KHÔNG có
+nút "Search Jobs" — chỉ có link **"Search for jobs"** (mục "Exprienced
+professionals") dẫn tới `careers.kpmg.com.vn/` (xác nhận SAP SuccessFactors CSB
+qua asset `rmkcdn.successfactors.com`). Trang đó CŨNG chưa phải kết quả search
+— fetch tiếp thấy link thật **"View All Jobs"** → `careers.kpmg.com.vn/viewalljobs/`.
+Sửa thành chuỗi 2 bước:
+
+```yaml
+navigation:
+  - click_text: "Search for jobs"
+  - click_text: "View All Jobs"
+target_url: "https://careers.kpmg.com.vn/viewalljobs/"
+```
+
+`target_url` cũng được cập nhật theo URL THẬT quan sát được (URL `/search/?...`
+trước đó chưa từng được xác minh tồn tại, chỉ là suy đoán theo pattern
+SuccessFactors của Deloitte).
+
+## 3. Unilever — combobox/autocomplete, không phải `<select>`
+
+### 3a. Navigation Engine: thêm `select_combobox` action mới
+
+`src/navigation/actions.py::select_combobox()` — action MỚI, dùng cho widget
+combobox/autocomplete tự build (React/Vue...), khác với `<select>` gốc
+(`select_option()`). Chuỗi thao tác: click/focus `input_selector` -> `fill(value)`
+-> đợi debounce (`wait_after_fill_ms`, mặc định 800ms) cho danh sách gợi ý
+render -> click option khớp `value` (thử `get_by_role("option", name=value)`
+trước — chuẩn ARIA cho item trong listbox — fallback sang khớp text hiển thị
+nếu widget không set đúng role). Vẫn giữ nguyên tắc "không tự đoán selector":
+`input_selector` là bắt buộc, thiếu sẽ raise `SelectorNotFound` rõ ràng.
+
+Test bằng browser thật với fixture combobox tự dựng
+(`tests/fixtures/navigation/combobox.html`, mô phỏng đúng hành vi
+type-to-filter + click option của autocomplete thật) —
+`test_select_combobox_handles_autocomplete_widget_not_native_select`,
+`test_select_combobox_requires_explicit_input_selector`.
+
+### 3b. Unilever cụ thể: tìm được đường tốt hơn hẳn combobox
+
+Qua tìm kiếm, xác nhận Unilever có board **Workday CÔNG KHAI thật**:
+`unilever.wd3.myworkdayjobs.com/Unilever_Experienced_Professionals` — khớp
+CHÍNH XÁC pattern URL adapter Workday hiện có
+(`{tenant}.{wd_number}.myworkdayjobs.com/{site}`) đã dùng cho các công ty khác.
+Thay vì chiến đấu với combobox trên `careers.unilever.com` (rủi ro DOM đổi,
+chậm hơn, cần browser), chuyển Unilever sang gọi thẳng API Workday:
+
+```yaml
+- name: "Unilever"
+  url: "https://unilever.wd3.myworkdayjobs.com/Unilever_Experienced_Professionals"
+  strategy: "direct"
+  ats_hint: "workday"
+  ats_params: { tenant: "unilever", wd_number: "wd3", site: "Unilever_Experienced_Professionals" }
+```
+
+API trả về job ở MỌI quốc gia (không lọc sẵn Vietnam phía server) — pipeline
+lọc Vietnam qua early location filter như mọi công ty khác, không cần thêm
+logic gì. **`select_combobox` vẫn được implement đầy đủ trong engine** (đúng
+yêu cầu "Navigation Engine should support combobox/autocomplete widgets") cho
+các công ty tương lai thật sự cần — chỉ riêng Unilever không cần dùng tới vì
+tìm được đường tắt tốt hơn.
+
+## 4. Bug pipeline: reachability check kép gây false UNREACHABLE (PwC)
+
+**Bug**: sau khi Navigation Engine điều hướng THÀNH CÔNG bằng browser thật
+(chứng minh trang load được), `pipeline.py` vẫn gọi `is_url_reachable()`
+(request HTTP thuần qua `requests`) lên URL đã resolve — 1 số site (PwC) chặn
+request KHÔNG có cookie/session/User-Agent mà browser vừa có, khiến check này
+báo SAI `UNREACHABLE` dù trang THỰC SỰ load được (đã tự chứng minh ngay trước
+đó).
+
+**Fix**: `run_for_company()` giờ BỎ QUA `is_url_reachable()` hoàn toàn khi
+`strategy` cần điều hướng VÀ navigation đã thành công — tín hiệu từ browser
+thật đáng tin hơn 1 request HTTP thuần tiếp theo. Company `strategy: "direct"`
+(không qua Navigation Engine) giữ NGUYÊN hành vi cũ — luôn check
+`is_url_reachable()` như trước (backward compatible).
+
+Test: `test_pwc_style_bug_navigation_success_never_gets_marked_unreachable`,
+`test_direct_strategy_still_performs_reachability_check_unaffected`.
+
+## 5. File thay đổi
+
+| File | Thay đổi |
+|---|---|
+| `src/navigation/actions.py` | Thêm `select_combobox()` |
+| `src/navigation/engine.py` | Thêm mô tả log cho `select_combobox` |
+| `src/pipeline.py` | Bỏ `is_url_reachable()` khi navigation đã tự chứng minh URL load được |
+| `config.yaml` | Sửa Techcombank (text đúng), KPMG (2 bước đúng), Unilever (chuyển sang Workday API trực tiếp) |
+| `tests/fixtures/navigation/combobox.html` | **Mới** — fixture autocomplete thật để test |
+| `tests/test_navigation.py` | Thêm 2 test cho `select_combobox` |
+| `tests/test_pipeline_navigation.py` | Cập nhật test theo hành vi reachability-check mới; thêm 2 test regression |
+
+**Tổng: 141/141 test pass** (`pytest tests/ -v`).
